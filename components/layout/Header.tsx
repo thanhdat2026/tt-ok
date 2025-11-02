@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useData } from '../../hooks/useDataContext';
@@ -6,6 +7,8 @@ import { ICONS } from '../../constants';
 import { CenterSettings, UserRole } from '../../types';
 import { GlobalSearch } from '../common/GlobalSearch';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
+import { Button } from '../common/Button';
+import { DonationModal } from '../common/DonationModal';
 
 interface HeaderProps {
   pageTitle: string;
@@ -41,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, onMenuClick }) => {
   const { state, updateSettings } = useData();
   const [isChangePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,6 +89,11 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, onMenuClick }) => {
             <GlobalSearch />
           </div>
           <Clock />
+
+          <Button variant="danger" size="sm" onClick={() => setIsDonationModalOpen(true)} className="!rounded-full !px-3 !py-1.5">
+             {React.cloneElement(ICONS.heart, {width: 16, height: 16})}
+             <span className="hidden sm:inline ml-1">Mời cafe</span>
+          </Button>
           
           {/* Unified User Menu */}
           <div className="relative" ref={userMenuRef}>
@@ -125,6 +134,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle, onMenuClick }) => {
         </div>
       </header>
       <ChangePasswordModal isOpen={isChangePasswordModalOpen} onClose={() => setChangePasswordModalOpen(false)} />
+      <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
     </>
   );
 };
