@@ -136,6 +136,8 @@ export const InvoicesTab: React.FC = () => {
         currentPage * ITEMS_PER_PAGE
     );
     
+    const allSortedInvoiceIds = useMemo(() => sortedInvoices.map(inv => inv.id), [sortedInvoices]);
+
     useEffect(() => {
         setCurrentPage(1);
     }, [searchQuery, classFilter, sortConfig]);
@@ -242,6 +244,7 @@ export const InvoicesTab: React.FC = () => {
                     onSort={handleSort}
                     selectedIds={selectedInvoiceIds}
                     onSelectionChange={setSelectedInvoiceIds}
+                    fullDataIds={allSortedInvoiceIds}
                     actions={(item) => (
                         <div className="flex items-center gap-2">
                             <button onClick={() => setViewInvoice(item)} className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Xem chi tiết">{ICONS.search}</button>
