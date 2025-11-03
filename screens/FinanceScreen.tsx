@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../hooks/useDataContext';
@@ -101,13 +102,13 @@ const OverviewTab: React.FC<{period: Period}> = ({period}) => {
     }, [state.invoices, state.transactions, state.expenses, state.students, start, end]);
     
     return (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="space-y-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 <Card title={`Doanh thu ghi nhận`} value={`${financialSummary.accrualRevenue.toLocaleString('vi-VN')} ₫`} icon={ICONS.reports} color="text-blue-600" />
                 <Card title={`Thực thu trong kỳ`} value={`${financialSummary.cashRevenue.toLocaleString('vi-VN')} ₫`} icon={ICONS.finance} color="text-green-600" />
                 <Card title={`Dòng tiền`} value={`${financialSummary.cashFlow.toLocaleString('vi-VN')} ₫`} icon={ICONS.dashboard} color={financialSummary.cashFlow >= 0 ? "text-teal-600" : "text-red-600"} />
             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="grid grid-cols-2 gap-4">
                 <Card title={`Tổng phải thu (Công nợ)`} value={`${financialSummary.totalReceivables.toLocaleString('vi-VN')} ₫`} icon={ICONS.students} color="text-red-500" />
                 <Card title={`Tổng số dư KH`} value={`${financialSummary.totalCredit.toLocaleString('vi-VN')} ₫`} icon={ICONS.checkCircle} color="text-indigo-500" />
             </div>

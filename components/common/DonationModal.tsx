@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { ICONS } from '../../constants';
+import { useToast } from '../../hooks/useToast';
 
 interface DonationModalProps {
     isOpen: boolean;
@@ -9,12 +10,24 @@ interface DonationModalProps {
 }
 
 export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose }) => {
-    
+    const { toast } = useToast();
     const qrCodeUrl = "https://img.vietqr.io/image/970405-2204205571130-compact2.png?accountName=LE%20VAN%20DAT";
     const accountDetails = {
         holder: "LE VAN DAT",
         bank: "AGRIBANK",
         number: "2204205571130",
+    };
+
+    const handleCopy = (text: string) => {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => {
+                toast.success("Đã sao chép số tài khoản!");
+            }, () => {
+                toast.error("Sao chép thất bại.");
+            });
+        } else {
+            toast.error("Trình duyệt không hỗ trợ tính năng này.");
+        }
     };
 
     return (
@@ -50,9 +63,14 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose })
                         <span className="text-gray-500 dark:text-gray-400">Ngân hàng:</span>
                         <span className="font-bold">{accountDetails.bank}</span>
                     </div>
-                     <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">Số tài khoản:</span>
-                        <span className="font-bold">{accountDetails.number}</span>
+                     <div className="flex justify-between items-center">
+                        <div>
+                           <span className="text-gray-500 dark:text-gray-400">Số tài khoản:</span>
+                           <span className="font-bold ml-2">{accountDetails.number}</span>
+                        </div>
+                        <button onClick={() => handleCopy(accountDetails.number)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600" title="Sao chép số tài khoản">
+                           {ICONS.copy}
+                        </button>
                     </div>
                 </div>
 

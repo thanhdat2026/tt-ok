@@ -4,10 +4,12 @@ import { useData } from '../../hooks/useDataContext';
 import { Student, Class, AttendanceStatus, Announcement, ClassSchedule } from '../../types';
 
 const InfoCard: React.FC<{ title: string; value: string | number; description: string }> = ({ title, value, description }) => (
-    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-md">
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-        <p className="text-3xl font-bold text-primary mt-1">{value}</p>
-        <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{description}</p>
+    <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-lg shadow-md flex flex-col justify-between">
+        <div>
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">{title}</p>
+            <p className="text-xl sm:text-2xl font-bold text-primary mt-1 truncate">{value}</p>
+        </div>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 truncate">{description}</p>
     </div>
 );
 
@@ -126,7 +128,7 @@ export const ParentDashboardScreen: React.FC = () => {
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Chào mừng, Phụ huynh {student.name}</h1>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <InfoCard 
                     title="Số dư Tài khoản" 
                     value={`${student.balance.toLocaleString('vi-VN')} ₫`} 

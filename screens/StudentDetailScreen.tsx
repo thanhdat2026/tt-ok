@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useDataContext';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { Table, SortConfig } from '../components/common/Table';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
-import { ICONS } from '../constants';
+import { ICONS, ROUTES } from '../constants';
 import { Transaction, ProgressReport, PersonStatus, TransactionType, Class, AttendanceStatus, UserRole } from '../types';
 import { CurrencyInput } from '../components/common/CurrencyInput';
 import { ListItemCard } from '../components/common/ListItemCard';
@@ -101,7 +101,7 @@ const AdjustmentForm: React.FC<{
     );
 };
 
-const AttendanceSummaryWidget: React.FC<{ studentId: string, enrolledClasses: Class[] }> = ({ studentId, enrolledClasses }) => {
+const AttendanceSummaryWidget: React.FC<{ studentId: string, enrolledClasses: Class[], onViewDetails: (classId: string, className: string) => void }> = ({ studentId, enrolledClasses, onViewDetails }) => {
     const { state } = useData();
     const studentAttendance = state.attendance.filter(a => a.studentId === studentId);
 
@@ -134,7 +134,11 @@ const AttendanceSummaryWidget: React.FC<{ studentId: string, enrolledClasses: Cl
             <h2 className="text-xl font-semibold mb-4">Thống kê Chuyên cần</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {summary.map(s => (
-                    <div key={s.classId} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div key={s.classId} 
+                         className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                         onClick={() => onViewDetails(s.classId, s.className)}
+                         title="Nhấn để xem chi tiết"
+                    >
                         <h3 className="font-semibold text-primary">{s.className}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2 text-center">
                             <div>
@@ -167,12 +171,15 @@ export const StudentDetailScreen: React.FC = () => {
     const { state, addAdjustment, updateTransaction, deleteTransaction } = useData();
     const { toast } = useToast();
     const { role } = useAuth();
+    const navigate = useNavigate();
     const { students, classes, progressReports, transactions, attendance } = state;
     
     const [activeTab, setActiveTab] = useState('overview');
     const [transactionModal, setTransactionModal] = useState<{ open: boolean, item?: Transaction }>({ open: false });
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, item?: Transaction }>({ open: false });
+    const [attendanceLogModal, setAttendanceLogModal] = useState<{ isOpen: boolean; classId: string | null; className: string | null }>({ isOpen: false, classId: null, className: null });
+
 
     const canManage = role !== UserRole.VIEWER;
     const student = useMemo(() => students.find(s => s.id === id), [students, id]);
@@ -256,6 +263,26 @@ export const StudentDetailScreen: React.FC = () => {
         }
         return sortableItems;
     }, [studentProgressReports, reportSortConfig]);
+    
+    const attendanceLogForModal = useMemo(() => {
+        if (!attendanceLogModal.classId || !student) return [];
+        return attendance
+            .filter(a => a.studentId === student.id && a.classId === attendanceLogModal.classId)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [attendance, student, attendanceLogModal.classId]);
+
+    const getStatusBadge = (status: AttendanceStatus) => {
+        switch (status) {
+            case AttendanceStatus.PRESENT:
+                return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Có mặt</span>;
+            case AttendanceStatus.ABSENT:
+                return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Vắng</span>;
+            case AttendanceStatus.LATE:
+                return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Trễ</span>;
+            default:
+                return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Chưa điểm danh</span>;
+        }
+    };
 
 
     if (!student) {
@@ -399,7 +426,11 @@ export const StudentDetailScreen: React.FC = () => {
                                 ))}
                             </div>
                         </div>
-                        <AttendanceSummaryWidget studentId={student.id} enrolledClasses={enrolledClasses} />
+                        <AttendanceSummaryWidget 
+                            studentId={student.id} 
+                            enrolledClasses={enrolledClasses}
+                            onViewDetails={(classId, className) => setAttendanceLogModal({ isOpen: true, classId, className })}
+                        />
                     </div>
                 )}
                 
@@ -471,28 +502,59 @@ export const StudentDetailScreen: React.FC = () => {
                          </div>
                     </div>
                 )}
-
-
-                <Modal isOpen={transactionModal.open} onClose={() => setTransactionModal({ open: false })} title={transactionModal.item ? 'Sửa Giao dịch' : 'Thêm Giao dịch Mới'}>
-                    <AdjustmentForm
-                        transactionToEdit={transactionModal.item}
-                        onSubmit={handleSaveTransaction}
-                        onCancel={() => setTransactionModal({ open: false })}
-                    />
-                </Modal>
-                <ConfirmationModal
-                    isOpen={deleteConfirm.open}
-                    onClose={() => setDeleteConfirm({ open: false })}
-                    onConfirm={handleDeleteTransaction}
-                    title="Xác nhận Xóa Giao dịch"
-                    message={<p>Bạn có chắc muốn xóa giao dịch "<strong>{deleteConfirm.item?.description}</strong>"? Hành động này sẽ hoàn lại số tiền vào số dư của học viên.</p>}
-                />
-                 <PaymentModal
-                    isOpen={paymentModalOpen}
-                    onClose={() => setPaymentModalOpen(false)}
-                    student={student}
-                />
             </div>
+
+            <Modal isOpen={transactionModal.open} onClose={() => setTransactionModal({ open: false })} title={transactionModal.item ? 'Sửa Giao dịch' : 'Thêm Giao dịch Mới'}>
+                <AdjustmentForm
+                    transactionToEdit={transactionModal.item}
+                    onSubmit={handleSaveTransaction}
+                    onCancel={() => setTransactionModal({ open: false })}
+                />
+            </Modal>
+            <ConfirmationModal
+                isOpen={deleteConfirm.open}
+                onClose={() => setDeleteConfirm({ open: false })}
+                onConfirm={handleDeleteTransaction}
+                title="Xác nhận Xóa Giao dịch"
+                message={<p>Bạn có chắc muốn xóa giao dịch "<strong>{deleteConfirm.item?.description}</strong>"? Hành động này sẽ hoàn lại số tiền vào số dư của học viên.</p>}
+            />
+            <PaymentModal
+                isOpen={paymentModalOpen}
+                onClose={() => setPaymentModalOpen(false)}
+                student={student}
+            />
+            <Modal 
+                isOpen={attendanceLogModal.isOpen} 
+                onClose={() => setAttendanceLogModal({ isOpen: false, classId: null, className: null })}
+                title={`Lịch sử điểm danh: ${student.name} - ${attendanceLogModal.className}`}
+            >
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                    {attendanceLogForModal.length > 0 ? (
+                        attendanceLogForModal.map(record => (
+                            <div key={record.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-md">
+                                <div className="flex items-center gap-3">
+                                    <p className="font-semibold">{record.date}</p>
+                                    {getStatusBadge(record.status)}
+                                </div>
+                                {canManage && (
+                                    <Button 
+                                        variant="secondary" 
+                                        size="sm"
+                                        onClick={() => {
+                                            navigate(ROUTES.ATTENDANCE_DETAIL.replace(':classId', record.classId).replace(':date', record.date));
+                                            setAttendanceLogModal({ isOpen: false, classId: null, className: null });
+                                        }}
+                                    >
+                                        Sửa
+                                    </Button>
+                                )}
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-center py-4 text-gray-500">Chưa có dữ liệu điểm danh cho lớp này.</p>
+                    )}
+                </div>
+            </Modal>
         </>
     );
 };

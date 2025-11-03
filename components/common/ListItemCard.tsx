@@ -50,7 +50,7 @@ export const ListItemCard: React.FC<ListItemCardProps> = ({ title, details, stat
         {details.map((detail, index) => (
           <div key={index} className="truncate">
             <p className="text-gray-500 dark:text-gray-400 text-xs">{detail.label}</p>
-            <p className="font-medium text-gray-800 dark:text-gray-200">{detail.value}</p>
+            <p className="font-medium text-gray-800 dark:text-gray-200 truncate">{detail.value}</p>
           </div>
         ))}
       </div>

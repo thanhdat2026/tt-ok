@@ -12,6 +12,12 @@ export const GlobalSearch: React.FC = () => {
     const navigate = useNavigate();
     const searchRef = useRef<HTMLDivElement>(null);
 
+    const typeIcons = {
+        student: ICONS.students,
+        teacher: ICONS.teachers,
+        class: ICONS.classes,
+    };
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -91,9 +97,14 @@ export const GlobalSearch: React.FC = () => {
                             {results.map(result => (
                                 <li key={`${result.type}-${result.id}`}
                                     onClick={() => handleResultClick(result.path)}
-                                    className="px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-b-0">
-                                    <p className="font-semibold text-gray-800 dark:text-gray-200">{result.name}</p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">{result.context}</p>
+                                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-b-0">
+                                    <div className="flex items-center gap-3 px-4 py-3">
+                                        <span className="text-gray-400">{React.cloneElement(typeIcons[result.type], { width: 20, height: 20 })}</span>
+                                        <div>
+                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{result.name}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{result.context}</p>
+                                        </div>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
