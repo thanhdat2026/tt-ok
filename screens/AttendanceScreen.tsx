@@ -56,19 +56,24 @@ export const AttendanceScreen: React.FC = () => {
 
     const attendanceCounts = useMemo(() => {
         if (!classId || !date) return new Map<string, number>();
-
+    
+        // Lấy chuỗi năm-tháng từ ngày được chọn (ví dụ: "2025-11-03" -> "2025-11")
+        const monthStr = date.substring(0, 7);
+    
         const counts = new Map<string, number>();
+        // Lọc tất cả các bản ghi điểm danh cho lớp cụ thể
         const classAttendanceRecords = attendance.filter(a => a.classId === classId);
-
+    
         classStudents.forEach(student => {
-            const studentPastAttendance = classAttendanceRecords.filter(a =>
+            // Lọc điểm danh cho học sinh hiện tại trong tháng đã chọn
+            const studentMonthlyAttendance = classAttendanceRecords.filter(a =>
                 a.studentId === student.id &&
-                a.date <= date! &&
+                a.date.startsWith(monthStr) && // Kiểm tra xem bản ghi có trong cùng tháng không
                 (a.status === AttendanceStatus.PRESENT || a.status === AttendanceStatus.LATE)
             );
-            counts.set(student.id, studentPastAttendance.length);
+            counts.set(student.id, studentMonthlyAttendance.length);
         });
-
+    
         return counts;
     }, [attendance, classId, date, classStudents]);
 

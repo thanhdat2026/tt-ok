@@ -1,5 +1,3 @@
-
-
 import {
     Student, Teacher, Staff, Class, AttendanceRecord, Invoice, PersonStatus, FeeType, AttendanceStatus, ProgressReport, Income, Expense, CenterSettings, Payroll, SalaryType, Announcement, UserRole, Transaction, TransactionType
 } from '../types';
@@ -28,7 +26,29 @@ interface AppState {
 function getLocalData(): AppState {
     const data = localStorage.getItem(APP_DATA_KEY);
     if (data) {
-        return JSON.parse(data);
+        const parsedData = JSON.parse(data);
+        
+        // Helper to ensure a property is an array. If it's missing, not an array, or null, default to an empty array.
+        const getArray = (collectionKey: keyof Omit<AppState, 'settings' | 'loading'>): any[] => {
+            const collection = parsedData[collectionKey];
+            return Array.isArray(collection) ? collection : [];
+        }
+
+        return {
+            students: getArray('students'),
+            teachers: getArray('teachers'),
+            staff: getArray('staff'),
+            classes: getArray('classes'),
+            attendance: getArray('attendance'),
+            invoices: getArray('invoices'),
+            progressReports: getArray('progressReports'),
+            transactions: getArray('transactions'),
+            income: getArray('income'),
+            expenses: getArray('expenses'),
+            payrolls: getArray('payrolls'),
+            announcements: getArray('announcements'),
+            settings: parsedData.settings || parsedData.centerInfo || MOCK_SETTINGS,
+        };
     }
     // Return initial state with MOCK data if nothing in localStorage
     const initialState: AppState = {
