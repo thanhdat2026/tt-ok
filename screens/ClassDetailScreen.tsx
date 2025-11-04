@@ -74,26 +74,52 @@ type ClassDetailTab = 'students' | 'attendance' | 'reports' | 'announcements';
 const AttendanceTab: React.FC<{ cls: any, attendance: AttendanceRecord[] }> = ({ cls, attendance }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const navigate = useNavigate();
+    const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
-    const attendanceHistory = useMemo(() => {
-        const historyMap = new Map<string, { present: number, absent: number, late: number, total: number }>();
+    const monthlyAttendanceHistory = useMemo(() => {
+        // First, get daily summaries like before
+        const dailyHistoryMap = new Map<string, { present: number, absent: number, late: number, total: number }>();
         const classAttendance = attendance.filter(a => a.classId === cls.id);
 
         classAttendance.forEach(a => {
-            if (!historyMap.has(a.date)) {
-                historyMap.set(a.date, { present: 0, absent: 0, late: 0, total: 0 });
+            if (!dailyHistoryMap.has(a.date)) {
+                dailyHistoryMap.set(a.date, { present: 0, absent: 0, late: 0, total: 0 });
             }
-            const summary = historyMap.get(a.date)!;
+            const summary = dailyHistoryMap.get(a.date)!;
             summary.total++;
             if (a.status === AttendanceStatus.PRESENT) summary.present++;
             if (a.status === AttendanceStatus.ABSENT) summary.absent++;
             if (a.status === AttendanceStatus.LATE) summary.late++;
         });
 
-        return Array.from(historyMap.entries())
+        const dailySummaries = Array.from(dailyHistoryMap.entries())
             .map(([date, summary]) => ({ date, summary }))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            .sort((a, b) => b.date.localeCompare(a.date)); // Sort dates within month descending
+
+        // Now group daily summaries by month
+        const monthlyMap = new Map<string, { date: string; summary: any }[]>(); // Map<"YYYY-MM", [dailySummary, ...]>
+        dailySummaries.forEach(daySummary => {
+            const month = daySummary.date.substring(0, 7); // "YYYY-MM"
+            if (!monthlyMap.has(month)) {
+                monthlyMap.set(month, []);
+            }
+            monthlyMap.get(month)!.push(daySummary);
+        });
+
+        // Format for rendering, sorted by month descending
+        return Array.from(monthlyMap.entries())
+            .map(([month, dates]) => ({
+                month,
+                sessionCount: dates.length,
+                dates: dates, // Already sorted descending
+            }))
+            .sort((a, b) => b.month.localeCompare(a.month));
+
     }, [attendance, cls.id]);
+    
+    const toggleMonth = (month: string) => {
+        setExpandedMonth(prev => (prev === month ? null : month));
+    };
     
     return (
         <div className="space-y-4">
@@ -113,22 +139,50 @@ const AttendanceTab: React.FC<{ cls: any, attendance: AttendanceRecord[] }> = ({
             </div>
             <div>
                 <h3 className="text-lg font-semibold mb-2">Lịch sử điểm danh</h3>
-                {attendanceHistory.length > 0 ? (
-                     <div className="space-y-3">
-                        {attendanceHistory.map(({ date, summary }) => (
-                            <div key={date} className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                                <div>
-                                    <p className="font-semibold">{date}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        Có mặt: <span className="text-green-600 font-semibold">{summary.present + summary.late}</span>, 
-                                        Vắng: <span className="text-red-600 font-semibold">{summary.absent}</span>
-                                    </p>
+                {monthlyAttendanceHistory.length > 0 ? (
+                     <div className="space-y-2">
+                        {monthlyAttendanceHistory.map(({ month, sessionCount, dates }) => {
+                            const [year, monthNum] = month.split('-');
+                            const isExpanded = expandedMonth === month;
+                            return (
+                                <div key={month} className="bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-shadow hover:shadow-md">
+                                    <button
+                                        onClick={() => toggleMonth(month)}
+                                        className="w-full p-3 flex justify-between items-center text-left"
+                                        aria-expanded={isExpanded}
+                                    >
+                                        <div>
+                                            <p className="font-semibold text-base">Tháng {monthNum}/{year}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Tổng số buổi: <span className="font-bold">{sessionCount}</span>
+                                            </p>
+                                        </div>
+                                        <span className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                        </span>
+                                    </button>
+                                    
+                                    {isExpanded && (
+                                        <div className="px-3 pb-3 space-y-2 border-t border-slate-200 dark:border-slate-600">
+                                            {dates.map(({ date, summary }) => (
+                                                <div key={date} className="p-3 bg-white dark:bg-slate-800 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                                    <div>
+                                                        <p className="font-semibold">{new Date(date + 'T00:00:00').toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                            Có mặt: <span className="text-green-600 font-semibold">{summary.present + summary.late}</span>, 
+                                                            Vắng: <span className="text-red-600 font-semibold">{summary.absent}</span>
+                                                        </p>
+                                                    </div>
+                                                    <Link to={ROUTES.ATTENDANCE_DETAIL.replace(':classId', cls.id).replace(':date', date)}>
+                                                        <Button variant="secondary" size="sm">Xem / Sửa</Button>
+                                                    </Link>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                <Link to={ROUTES.ATTENDANCE_DETAIL.replace(':classId', cls.id).replace(':date', date)}>
-                                    <Button variant="secondary">Xem / Sửa</Button>
-                                </Link>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 ) : (
                     <p className="text-gray-500 text-center py-4">Chưa có lịch sử điểm danh.</p>

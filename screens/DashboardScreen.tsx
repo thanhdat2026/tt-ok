@@ -197,7 +197,7 @@ const AdminDashboard: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card title="Học viên đang học" value={totalStudents} icon={ICONS.students} color="text-blue-600 dark:text-blue-400" />
                 <Card title="Lớp học hoạt động" value={activeClasses} icon={ICONS.classes} color="text-green-600 dark:text-green-400" />
                 {canViewFinancials && (

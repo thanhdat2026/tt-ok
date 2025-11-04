@@ -99,10 +99,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const data = await api.loadInitialData();
         setState({ ...data, loading: false });
     } catch (err: any) {
-        console.error("Failed to load local data:", err);
-        // This error now implies a problem with localStorage, not network.
-        setIsInitialOffline(true);
-        setError('Không thể tải dữ liệu cục bộ. Vui lòng cho phép trang web lưu trữ dữ liệu và thử lại.');
+        console.error("Không thể tải dữ liệu:", err);
+        // Check for specific permission error from api.ts
+        if (err.message && err.message.startsWith('PERMISSION_ERROR:')) {
+            setError(err.message.replace('PERMISSION_ERROR: ', ''));
+        } else {
+            // This now represents any local data loading failure (FSA or localStorage)
+            setIsInitialOffline(true);
+            setError(`Không thể tải dữ liệu cục bộ. Lỗi: ${err.message || 'Không rõ'}. Thử phục hồi từ bản sao lưu trong Cài đặt hoặc chọn lại tệp dữ liệu.`);
+        }
         setState(prev => ({ ...prev, loading: false }));
     }
   }, []);

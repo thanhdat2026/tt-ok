@@ -6,6 +6,7 @@ import { CenterSettings, UserRole } from '../types';
 import { ICONS } from '../constants';
 import { ConfirmationModal } from '../components/common/ConfirmationModal';
 import { useAuth } from '../hooks/useAuth';
+import * as api from '../services/api';
 
 const AdminPasswordSettings: React.FC = () => {
     const { state, updateSettings } = useData();
@@ -100,7 +101,7 @@ const AdminPasswordSettings: React.FC = () => {
 
 
 export const SettingsScreen: React.FC = () => {
-    const { state, updateSettings, backupData, restoreData, resetToMockData, clearCollections, deleteAttendanceByMonth } = useData();
+    const { state, updateSettings, backupData, restoreData, resetToMockData, clearCollections, deleteAttendanceByMonth, refreshData } = useData();
     const { toast } = useToast();
     const { role } = useAuth();
     const [settings, setSettings] = useState<CenterSettings>(state.settings);
@@ -117,9 +118,22 @@ export const SettingsScreen: React.FC = () => {
 
     const isViewer = role === UserRole.VIEWER;
 
+    const [storageMethod, setStorageMethod] = useState<'local' | 'fs'>('local');
+    const [fileName, setFileName] = useState<string | null>(null);
+    const [isMigrating, setIsMigrating] = useState(false);
 
     useEffect(() => {
-        // Ensure viewerAccountActive is always a boolean in the local state
+        if (api.isFileSystemSupported()) {
+            api.checkStorageMethod().then(({ method, handle }) => {
+                setStorageMethod(method);
+                if (method === 'fs' && handle) {
+                    setFileName(handle.name);
+                }
+            });
+        }
+    }, []);
+
+    useEffect(() => {
         setSettings({
             ...state.settings,
             viewerAccountActive: state.settings.viewerAccountActive ?? true,
@@ -128,7 +142,8 @@ export const SettingsScreen: React.FC = () => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
-        if (type === 'checkbox') {
+         if (type === 'checkbox') {
+            // This is now only for the viewer toggle, but keep it generic in case
             const { checked } = e.target as HTMLInputElement;
             setSettings(prev => ({ ...prev, [name]: checked }));
         } else {
@@ -140,11 +155,7 @@ export const SettingsScreen: React.FC = () => {
         e.preventDefault();
         setIsSaving(true);
         try {
-            // Ensure the value being saved is a boolean, not undefined
-            const settingsToSave = {
-                ...settings,
-                viewerAccountActive: !!settings.viewerAccountActive,
-            };
+            const { viewerAccountActive, ...settingsToSave } = settings;
             await updateSettings(settingsToSave);
             toast.success('Đã cập nhật cài đặt trung tâm.');
         } catch (error) {
@@ -154,11 +165,25 @@ export const SettingsScreen: React.FC = () => {
         }
     };
     
+    const handleViewerToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (isViewer) return;
+        const { checked } = e.target;
+        const oldSettings = { ...settings };
+        setSettings(prev => ({ ...prev, viewerAccountActive: checked }));
+        try {
+            await updateSettings({ ...state.settings, viewerAccountActive: checked });
+            toast.success('Cài đặt tài khoản Viewer đã được cập nhật.');
+        } catch (error) {
+            toast.error("Lỗi khi cập nhật.");
+            setSettings(oldSettings);
+        }
+    };
+    
     const handleBackup = async () => {
         try {
             const dataToBackup = await backupData();
             const dataStr = JSON.stringify(dataToBackup, null, 2);
-            const blob = new Blob([dataStr], { type: "application/json" });
+            const blob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -169,29 +194,22 @@ export const SettingsScreen: React.FC = () => {
             URL.revokeObjectURL(url);
             toast.success('Sao lưu dữ liệu thành công!');
         } catch (error) {
-            console.error("Backup failed:", error);
-            toast.error('Sao lưu dữ liệu thất bại.');
+            toast.error('Sao lưu thất bại.');
         }
     };
     
     const handleRestoreFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const text = e.target?.result;
-                if (typeof text !== 'string') throw new Error("File could not be read");
+                const text = e.target?.result as string;
                 const restoredData = JSON.parse(text);
-                
                 if (restoredData.students && (restoredData.settings || restoredData.centerInfo)) {
                     setRestoreConfirm({ open: true, data: restoredData });
-                } else {
-                    throw new Error("Invalid backup file format");
-                }
+                } else { throw new Error("File sao lưu không hợp lệ"); }
             } catch (error) {
-                console.error("Restore failed:", error);
                 toast.error('Phục hồi thất bại. File sao lưu không hợp lệ.');
             } finally {
                 event.target.value = '';
@@ -204,37 +222,35 @@ export const SettingsScreen: React.FC = () => {
         if (restoreConfirm.data) {
             try {
                 await restoreData(restoreConfirm.data);
-                toast.success('Phục hồi dữ liệu thành công! Trang sẽ được tải lại.');
-                setTimeout(() => window.location.reload(), 1500);
+                toast.success('Phục hồi dữ liệu thành công! Ứng dụng sẽ tải lại.');
             } catch (error) {
-                toast.error("Lỗi khi phục hồi dữ liệu.");
+                toast.error('Phục hồi thất bại.');
+            } finally {
+                setRestoreConfirm({ open: false, data: null });
             }
         }
     };
-
     const handleConfirmReset = async () => {
         try {
             await resetToMockData();
-            toast.success('Đã khôi phục dữ liệu thành công! Trang sẽ được tải lại.');
-            setTimeout(() => window.location.reload(), 1500);
+            toast.success('Đã khôi phục dữ liệu mặc định thành công!');
         } catch (error) {
-            toast.error("Lỗi khi khôi phục dữ liệu.");
+            toast.error('Lỗi khi khôi phục dữ liệu mặc định.');
+        } finally {
+            setResetConfirmOpen(false);
         }
     };
-
     const handleCheckboxChange = (collection: 'students' | 'teachers' | 'staff' | 'classes') => {
         setCollectionsToClear(prev => 
             prev.includes(collection) 
-                ? prev.filter(c => c !== collection)
+                ? prev.filter(c => c !== collection) 
                 : [...prev, collection]
         );
     };
-
     const handleClearData = async () => {
         try {
             await clearCollections(collectionsToClear);
-            toast.success('Dữ liệu đã chọn đã được xóa thành công! Trang sẽ được tải lại.');
-            setTimeout(() => window.location.reload(), 1500);
+            toast.success(`Đã xóa thành công dữ liệu của ${collectionsToClear.length} module.`);
         } catch (error) {
             toast.error('Lỗi khi xóa dữ liệu.');
         } finally {
@@ -242,13 +258,46 @@ export const SettingsScreen: React.FC = () => {
             setCollectionsToClear([]);
         }
     };
-
     const handleDeleteAttendanceByMonth = async () => {
         try {
             await deleteAttendanceByMonth({ month: deleteAttMonth, year: deleteAttYear });
-            toast.success(`Đã xóa toàn bộ dữ liệu điểm danh của tháng ${deleteAttMonth}/${deleteAttYear}.`);
+            toast.success(`Đã xóa dữ liệu điểm danh tháng ${deleteAttMonth}/${deleteAttYear}.`);
         } catch (error) {
             toast.error('Lỗi khi xóa dữ liệu điểm danh.');
+        } finally {
+            setConfirmDeleteAtt(false);
+        }
+    };
+
+    const handleSwitchToFile = async () => {
+        setIsMigrating(true);
+        try {
+            const handle = await api.migrateToFSA();
+            toast.success(`Dữ liệu đã được chuyển sang tệp: ${handle.name}. Tải lại trang để áp dụng.`);
+            await refreshData();
+            setStorageMethod('fs');
+            setFileName(handle.name);
+        } catch (err: any) {
+            if (err.name !== 'AbortError') {
+                toast.error("Không thể chuyển đổi: " + err.message);
+            }
+        } finally {
+            setIsMigrating(false);
+        }
+    };
+    
+    const handleSwitchToLocal = async () => {
+        setIsMigrating(true);
+        try {
+            await api.migrateToLocalStorage();
+            toast.success("Đã chuyển dữ liệu về lưu trữ trên trình duyệt. Tải lại trang để áp dụng.");
+            await refreshData();
+            setStorageMethod('local');
+            setFileName(null);
+        } catch (err: any) {
+             toast.error("Không thể chuyển đổi: " + err.message);
+        } finally {
+             setIsMigrating(false);
         }
     };
 
@@ -267,41 +316,41 @@ export const SettingsScreen: React.FC = () => {
         <div className="space-y-8 max-w-4xl mx-auto">
             <h1 className="text-3xl font-bold">Cài đặt</h1>
 
-            <form onSubmit={handleSettingsSubmit} className="space-y-8">
-                {role === UserRole.ADMIN && (
-                     <div className="card-base">
-                        <h2 className="text-2xl font-bold mb-6">Quản lý Tài khoản</h2>
-                         <div className="flex items-center justify-between p-4 border rounded-lg dark:border-gray-600">
-                            <div>
-                                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Tài khoản Viewer (Chỉ đọc)</h4>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Cho phép đăng nhập với quyền xem toàn bộ dữ liệu nhưng không thể chỉnh sửa.</p>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    name="viewerAccountActive"
-                                    checked={settings.viewerAccountActive}
-                                    onChange={handleChange}
-                                    className="sr-only peer"
-                                    disabled={isViewer}
-                                />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
-                                <span className={`ml-3 text-sm font-medium ${settings.viewerAccountActive ? 'text-green-600' : 'text-gray-500'}`}>
-                                    {settings.viewerAccountActive ? 'Hoạt động' : 'Vô hiệu hóa'}
-                                </span>
-                            </label>
+             <div className="card-base">
+                <h2 className="text-2xl font-bold mb-6">Lưu trữ Dữ liệu</h2>
+                {api.isFileSystemSupported() ? (
+                    storageMethod === 'fs' ? (
+                        <div>
+                            <p className="text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 p-3 rounded-md mb-4">
+                                <strong className="font-semibold">Trạng thái:</strong> Dữ liệu đang được lưu an toàn vào tệp <code className="font-mono bg-black/10 px-1 rounded">{fileName}</code>.
+                            </p>
+                            <Button variant="secondary" onClick={handleSwitchToLocal} isLoading={isMigrating} disabled={isViewer}>
+                                Chuyển về Lưu trữ trên Trình duyệt
+                            </Button>
                         </div>
-                    </div>
+                    ) : (
+                        <div>
+                            <p className="text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md mb-4">
+                                <strong className="font-semibold">Trạng thái:</strong> Dữ liệu đang được lưu trong trình duyệt. Dữ liệu có thể bị mất nếu bạn xóa lịch sử duyệt web.
+                            </p>
+                            <Button onClick={handleSwitchToFile} isLoading={isMigrating} disabled={isViewer}>
+                                {ICONS.backup} Chọn Tệp Dữ liệu để Lưu trữ An toàn
+                            </Button>
+                             <p className="text-xs text-gray-500 mt-2">Thao tác này sẽ di chuyển dữ liệu hiện tại vào một tệp bạn chọn. Ứng dụng sẽ cần quyền truy cập tệp này mỗi khi khởi động.</p>
+                        </div>
+                    )
+                ) : (
+                    <p className="text-gray-500">Trình duyệt của bạn không hỗ trợ tính năng lưu trữ vào tệp. Dữ liệu sẽ được lưu cục bộ trong trình duyệt.</p>
                 )}
-
-                <AdminPasswordSettings />
-
+            </div>
+            
+            <form onSubmit={handleSettingsSubmit} className="space-y-8">
                 <div className="card-base">
                     <h2 className="text-2xl font-bold mb-6">Cài đặt Trung tâm</h2>
                     <div className="space-y-6">
                         <fieldset className="form-fieldset" disabled={isViewer}>
                             <legend className="form-legend">Thông tin chung</legend>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                                 <div>
                                     <label className="block text-sm font-medium">Tên trung tâm</label>
                                     <input type="text" name="name" value={settings.name} onChange={handleChange} className="form-input mt-1" />
@@ -319,7 +368,7 @@ export const SettingsScreen: React.FC = () => {
                         
                          <fieldset className="form-fieldset" disabled={isViewer}>
                             <legend className="form-legend">Tùy chỉnh Giao diện</legend>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                                  <div>
                                     <label className="block text-sm font-medium">Màu chủ đạo</label>
                                     <input type="color" name="themeColor" value={settings.themeColor} onChange={handleChange} className="form-input mt-1 h-12" />
@@ -333,7 +382,7 @@ export const SettingsScreen: React.FC = () => {
 
                         <fieldset className="form-fieldset" disabled={isViewer}>
                             <legend className="form-legend">Tùy chỉnh Trang đăng nhập</legend>
-                            <div className="mt-2 space-y-4">
+                             <div className="mt-2 space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium">Nội dung Tiêu đề</label>
                                     <textarea
@@ -355,7 +404,7 @@ export const SettingsScreen: React.FC = () => {
 
                         <fieldset className="form-fieldset" disabled={isViewer}>
                             <legend className="form-legend">Thông tin Thanh toán (cho mã QR)</legend>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                                 <div>
                                     <label className="block text-sm font-medium">Tên ngân hàng</label>
                                     <input type="text" name="bankName" value={settings.bankName || ''} onChange={handleChange} className="form-input mt-1" placeholder="VD: Vietcombank" />
@@ -379,16 +428,44 @@ export const SettingsScreen: React.FC = () => {
 
                  {!isViewer && (
                      <div className="flex justify-end pt-4">
-                        <Button type="submit" isLoading={isSaving}>Lưu Cài đặt</Button>
+                        <Button type="submit" isLoading={isSaving}>Lưu Cài đặt chung</Button>
                     </div>
                 )}
             </form>
             
+            <AdminPasswordSettings />
+
+            {role === UserRole.ADMIN && (
+                <div className="card-base">
+                    <h2 className="text-2xl font-bold mb-6">Quản lý Tài khoản Viewer</h2>
+                    <div className="flex items-center justify-between p-4 border rounded-lg dark:border-gray-600">
+                        <div>
+                            <h4 className="font-semibold text-gray-800 dark:text-gray-200">Tài khoản Viewer (Chỉ đọc)</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Cho phép đăng nhập với quyền xem toàn bộ dữ liệu nhưng không thể chỉnh sửa.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                name="viewerAccountActive"
+                                checked={settings.viewerAccountActive}
+                                onChange={handleViewerToggle}
+                                className="sr-only peer"
+                                disabled={isViewer}
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                            <span className={`ml-3 text-sm font-medium ${settings.viewerAccountActive ? 'text-green-600' : 'text-gray-500'}`}>
+                                {settings.viewerAccountActive ? 'Hoạt động' : 'Vô hiệu hóa'}
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            )}
+
             <div className="card-base">
                 <h2 className="text-2xl font-bold mb-6">Quản lý Dữ liệu</h2>
                 <div className="space-y-6">
                      <div className="p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-gray-700 rounded-lg">
-                        <h3 className="font-semibold text-blue-800 dark:text-blue-200">Sao lưu & Phục hồi</h3>
+                        <h3 className="font-semibold text-blue-800 dark:text-blue-200">Sao lưu & Phục hồi Thủ công</h3>
                         <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-3">Tạo bản sao lưu toàn bộ dữ liệu hoặc phục hồi từ một file sao lưu.</p>
                         <div className="flex flex-col sm:flex-row gap-4">
                             <Button onClick={handleBackup} variant="secondary" disabled={isViewer}>

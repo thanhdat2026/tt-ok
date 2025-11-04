@@ -1,3 +1,27 @@
+// Fix: Add definitions for File System Access API to fix TypeScript errors.
+type FileSystemPermissionMode = 'read' | 'readwrite';
+
+declare global {
+  interface Window {
+    showSaveFilePicker(options?: any): Promise<FileSystemFileHandle>;
+  }
+
+  interface FileSystemHandle {
+    queryPermission(descriptor?: { mode: FileSystemPermissionMode }): Promise<PermissionState>;
+    requestPermission(descriptor?: { mode: FileSystemPermissionMode }): Promise<PermissionState>;
+  }
+
+  interface FileSystemFileHandle extends FileSystemHandle {
+    createWritable(): Promise<FileSystemWritableFileStream>;
+  }
+
+  interface FileSystemWritableFileStream extends WritableStream {
+    write(data: any): Promise<void>;
+    close(): Promise<void>;
+  }
+}
+// End of fix
+
 import {
     Student, Teacher, Staff, Class, AttendanceRecord, Invoice, PersonStatus, FeeType, AttendanceStatus, ProgressReport, Income, Expense, CenterSettings, Payroll, SalaryType, Announcement, UserRole, Transaction, TransactionType
 } from '../types';
@@ -21,37 +45,83 @@ interface AppState {
   announcements: Announcement[];
 }
 
-// --- Data Store Management ---
+// --- IndexedDB for File Handle ---
+const DB_NAME = 'EduCenterFSA_DB';
+const STORE_NAME = 'FileSystemHandles';
+const HANDLE_KEY = 'dataFileHandle';
 
-function getLocalData(): AppState {
-    const data = localStorage.getItem(APP_DATA_KEY);
-    if (data) {
-        const parsedData = JSON.parse(data);
-        
-        // Helper to ensure a property is an array. If it's missing, not an array, or null, default to an empty array.
-        const getArray = (collectionKey: keyof Omit<AppState, 'settings' | 'loading'>): any[] => {
-            const collection = parsedData[collectionKey];
-            return Array.isArray(collection) ? collection : [];
+const getDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onerror = () => reject("Không thể mở IndexedDB");
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(STORE_NAME);
+    };
+  });
+};
+
+const idbGet = async (key: string) => {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).get(key);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const idbSet = async (key: string, value: any) => {
+  const db = await getDB();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const request = tx.objectStore(STORE_NAME).put(value, key);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const idbClear = async (key: string) => {
+  const db = await getDB();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const request = tx.objectStore(STORE_NAME).delete(key);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+// --- File System Access API Helpers ---
+async function verifyPermission(fileHandle: FileSystemFileHandle, withWrite: boolean = false) {
+  const options = { mode: (withWrite ? 'readwrite' : 'read') as FileSystemPermissionMode };
+  if ((await fileHandle.queryPermission(options)) === 'granted') {
+    return true;
+  }
+  if ((await fileHandle.requestPermission(options)) === 'granted') {
+    return true;
+  }
+  return false;
+}
+
+// --- Storage Method Detection ---
+export const isFileSystemSupported = () => 'showSaveFilePicker' in window;
+
+export async function checkStorageMethod(): Promise<{ method: 'fs' | 'local'; handle?: FileSystemFileHandle }> {
+    if (!isFileSystemSupported()) return { method: 'local' };
+    try {
+        const handle = await idbGet(HANDLE_KEY) as FileSystemFileHandle | null;
+        if (handle) {
+            return { method: 'fs', handle };
         }
-
-        return {
-            students: getArray('students'),
-            teachers: getArray('teachers'),
-            staff: getArray('staff'),
-            classes: getArray('classes'),
-            attendance: getArray('attendance'),
-            invoices: getArray('invoices'),
-            progressReports: getArray('progressReports'),
-            transactions: getArray('transactions'),
-            income: getArray('income'),
-            expenses: getArray('expenses'),
-            payrolls: getArray('payrolls'),
-            announcements: getArray('announcements'),
-            settings: parsedData.settings || parsedData.centerInfo || MOCK_SETTINGS,
-        };
+    } catch(e) {
+        console.error("Lỗi khi kiểm tra phương thức lưu trữ:", e);
     }
-    // Return initial state with MOCK data if nothing in localStorage
-    const initialState: AppState = {
+    return { method: 'local' };
+}
+
+
+function getMockDataState(): AppState {
+    return {
         students: MOCK_STUDENTS,
         teachers: MOCK_TEACHERS,
         staff: MOCK_STAFF,
@@ -66,43 +136,87 @@ function getLocalData(): AppState {
         announcements: MOCK_ANNOUNCEMENTS,
         settings: MOCK_SETTINGS,
     };
-    // Save the initial state so it exists for the next load
-    localStorage.setItem(APP_DATA_KEY, JSON.stringify(initialState));
-    return initialState;
 }
 
 
-function setLocalData(data: Omit<AppState, 'loading'> | AppState) {
-    localStorage.setItem(APP_DATA_KEY, JSON.stringify(data));
+// --- Data Store Management ---
+
+async function getLocalData(): Promise<AppState> {
+    const { method, handle } = await checkStorageMethod();
+    
+    if (method === 'fs' && handle) {
+        try {
+            const hasPermission = await verifyPermission(handle, false);
+            if (!hasPermission) {
+                throw new Error("PERMISSION_ERROR: Quyền truy cập tệp dữ liệu đã bị từ chối. Vui lòng tải lại trang và cấp quyền, hoặc chọn phương thức lưu trữ khác trong Cài đặt.");
+            }
+            const file = await handle.getFile();
+            const contents = await file.text();
+            if (!contents) {
+                const mockData = getMockDataState();
+                await setLocalData(mockData);
+                return mockData;
+            }
+            return JSON.parse(contents);
+        } catch (err) {
+            console.error("Lỗi đọc tệp, không thể tiếp tục:", err);
+            if (err instanceof Error && err.message.startsWith('PERMISSION_ERROR')) {
+                 throw err;
+            }
+            throw new Error(`Lỗi khi đọc tệp dữ liệu: ${err instanceof Error ? err.message : String(err)}. Dữ liệu có thể bị hỏng hoặc tệp đã bị di chuyển.`);
+        }
+    }
+
+    const data = localStorage.getItem(APP_DATA_KEY);
+    if (data) return JSON.parse(data);
+
+    const mockData = getMockDataState();
+    localStorage.setItem(APP_DATA_KEY, JSON.stringify(mockData));
+    return mockData;
+}
+
+async function setLocalData(data: AppState) {
+     const { method, handle } = await checkStorageMethod();
+     if (method === 'fs' && handle) {
+        try {
+            const hasPermission = await verifyPermission(handle, true);
+            if (!hasPermission) {
+                throw new Error("Không thể lưu thay đổi. Quyền ghi vào tệp dữ liệu đã bị từ chối.");
+            }
+            const writable = await handle.createWritable();
+            await writable.write(JSON.stringify(data, null, 2));
+            await writable.close();
+            return;
+        } catch (err) {
+            console.error("Lỗi ghi tệp:", err);
+            throw err;
+        }
+     }
+     localStorage.setItem(APP_DATA_KEY, JSON.stringify(data));
 }
 
 // --- API Functions ---
 
 export async function loadInitialData(): Promise<AppState> {
-    return Promise.resolve(getLocalData());
+    return getLocalData();
 }
 
 const generateUniqueId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-async function addDoc<T extends { id: string }>(collectionName: keyof AppState, newItem: T): Promise<T> {
-    const appData = getLocalData();
-    // FIX: Using 'unknown' as an intermediate cast to handle the union type of appData[collectionName],
-    // which could include non-array types or arrays of different types. This is safe
-    // in this context as this function is internally controlled to only operate on array collections.
+async function addDoc<T extends { id: string }>(collectionName: keyof Omit<AppState, 'settings'>, newItem: T): Promise<T> {
+    const appData = await getLocalData();
     const collection = appData[collectionName] as unknown as T[];
-    
     if (collection.some(item => item.id === newItem.id)) {
         throw new Error(`An item with ID ${newItem.id} already exists in ${collectionName}.`);
     }
-
     collection.push(newItem);
-    setLocalData(appData);
+    await setLocalData(appData);
     return newItem;
 }
 
 
-async function updateDoc<T extends { id: string }>(collectionName: keyof AppState, docId: string, data: T): Promise<void> {
-    const appData = getLocalData();
+async function updateDoc<T extends { id: string }>(collectionName: keyof Omit<AppState, 'settings'>, docId: string, data: T): Promise<void> {
+    const appData = await getLocalData();
     const collection = appData[collectionName] as any[];
     
     if (!collection.some((item: any) => item.id === docId)) {
@@ -110,20 +224,20 @@ async function updateDoc<T extends { id: string }>(collectionName: keyof AppStat
     }
 
     appData[collectionName] = collection.map((item: any) => item.id === docId ? data : item) as any;
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
-async function deleteDoc(collectionName: keyof AppState, docId: string): Promise<void> {
-    const appData = getLocalData();
+async function deleteDoc(collectionName: keyof Omit<AppState, 'settings'>, docId: string): Promise<void> {
+    const appData = await getLocalData();
     const collection = appData[collectionName] as any[];
     appData[collectionName] = collection.filter((item: any) => item.id !== docId) as any;
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 
 // --- Students ---
 export async function addStudent({ student, classIds }: { student: Student, classIds: string[] }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     if (appData.students.some(s => s.id === student.id)) {
         throw new Error(`Học viên với mã '${student.id}' đã tồn tại.`);
     }
@@ -135,18 +249,17 @@ export async function addStudent({ student, classIds }: { student: Student, clas
         }
         return c;
     });
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function updateStudent({ originalId, updatedStudent, classIds }: { originalId: string, updatedStudent: Student, classIds: string[] }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const newId = updatedStudent.id;
 
     if (originalId !== newId) {
         if (appData.students.some(s => s.id === newId)) {
              throw new Error(`Học viên với mã '${newId}' đã tồn tại.`);
         }
-        // Update all related records with the new ID
         appData.students = appData.students.map(s => s.id === originalId ? updatedStudent : s);
         appData.attendance = appData.attendance.map(a => a.studentId === originalId ? { ...a, studentId: newId } : a);
         appData.invoices = appData.invoices.map(i => i.studentId === originalId ? { ...i, studentId: newId, studentName: updatedStudent.name } : i);
@@ -156,7 +269,6 @@ export async function updateStudent({ originalId, updatedStudent, classIds }: { 
         appData.students = appData.students.map(s => s.id === originalId ? updatedStudent : s);
     }
     
-    // Update class enrollments for both ID change and no ID change scenarios
     const finalStudentId = newId;
     const newClassIds = new Set(classIds);
     appData.classes = appData.classes.map(c => {
@@ -165,24 +277,23 @@ export async function updateStudent({ originalId, updatedStudent, classIds }: { 
         const shouldBeInClass = newClassIds.has(c.id);
 
         if(wasInClass) studentIds.delete(originalId);
-
         if(shouldBeInClass) studentIds.add(finalStudentId);
         
         return { ...c, studentIds: Array.from(studentIds) };
     });
 
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function deleteStudent(studentId: string): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     appData.students = appData.students.filter(s => s.id !== studentId);
     appData.classes = appData.classes.map(c => ({ ...c, studentIds: c.studentIds.filter(id => id !== studentId) }));
     appData.attendance = appData.attendance.filter(a => a.studentId !== studentId);
     appData.invoices = appData.invoices.filter(i => i.studentId !== studentId);
     appData.progressReports = appData.progressReports.filter(p => p.studentId !== studentId);
     appData.transactions = appData.transactions.filter(t => t.studentId !== studentId);
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 // --- Teachers, Staff, Classes ---
@@ -204,49 +315,48 @@ export async function addAnnouncement(data: Omit<Announcement, 'id'>): Promise<A
 }
 
 export async function updateTeacher({ originalId, updatedTeacher }: { originalId: string, updatedTeacher: Teacher }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     if (originalId !== updatedTeacher.id) {
         if(appData.teachers.some(t => t.id === updatedTeacher.id)) throw new Error("Mã giáo viên đã tồn tại.");
         appData.classes = appData.classes.map(c => ({...c, teacherIds: c.teacherIds.map(tid => tid === originalId ? updatedTeacher.id : tid)}));
     }
     appData.teachers = appData.teachers.map(t => t.id === originalId ? updatedTeacher : t);
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function deleteTeacher(teacherId: string): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     appData.teachers = appData.teachers.filter(t => t.id !== teacherId);
     appData.classes = appData.classes.map(c => ({...c, teacherIds: c.teacherIds.filter(id => id !== teacherId)}));
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function updateStaff({ originalId, updatedStaff }: { originalId: string, updatedStaff: Staff }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
      if (originalId !== updatedStaff.id && appData.staff.some(s => s.id === updatedStaff.id)) {
         throw new Error("Mã nhân viên đã tồn tại.");
     }
     appData.staff = appData.staff.map(t => t.id === originalId ? updatedStaff : t);
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export const deleteStaff = (staffId: string) => deleteDoc('staff', staffId);
 
 export async function updateClass({ originalId, updatedClass }: { originalId: string, updatedClass: Class }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
      if (originalId !== updatedClass.id && appData.classes.some(c => c.id === updatedClass.id)) {
         throw new Error("Mã lớp đã tồn tại.");
     }
     appData.classes = appData.classes.map(c => c.id === originalId ? updatedClass : c);
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function deleteClass(classId: string): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     appData.classes = appData.classes.filter(c => c.id !== classId);
-    // Also remove attendance and reports for this class to prevent orphaned data
     appData.attendance = appData.attendance.filter(a => a.classId !== classId);
     appData.progressReports = appData.progressReports.filter(pr => pr.classId !== classId);
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export const updateIncome = (item: Income) => updateDoc('income', item.id, item);
@@ -257,50 +367,43 @@ export const deleteAnnouncement = (id: string) => deleteDoc('announcements', id)
 
 // --- Settings ---
 export async function updateSettings(settings: CenterSettings): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     appData.settings = settings;
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function completeOnboardingStep(step: string): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     if (!appData.settings.onboardingStepsCompleted.includes(step)) {
         appData.settings.onboardingStepsCompleted.push(step);
     }
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 // --- Complex Operations ---
 export async function updateAttendance(records: AttendanceRecord[]): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const recordsMap = new Map(records.map(r => [`${r.classId}-${r.date}-${r.studentId}`, r]));
-    
-    // Filter out old records for the specific class/date combos being updated
     const updatedAttendance = appData.attendance.filter(existing => {
         const key = `${existing.classId}-${existing.date}-${existing.studentId}`;
         return !recordsMap.has(key);
     });
-
-    // Add the new/updated records
     records.forEach(record => {
-        // Ensure an ID exists
         const recordWithId = { ...record, id: record.id || generateUniqueId('ATT') };
         updatedAttendance.push(recordWithId);
     });
-
     appData.attendance = updatedAttendance;
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function generateInvoices({ month, year }: { month: number, year: number }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
     const activeStudents = appData.students.filter(s => s.status === PersonStatus.ACTIVE);
 
     for (const student of activeStudents) {
         let totalAmount = 0;
         let details = '';
-        let totalSessions = 0;
         const studentClasses = appData.classes.filter(c => c.studentIds.includes(student.id));
 
         for (const cls of studentClasses) {
@@ -310,13 +413,10 @@ export async function generateInvoices({ month, year }: { month: number, year: n
                 (a.status === AttendanceStatus.PRESENT || a.status === AttendanceStatus.LATE)
             ).length;
 
-            totalSessions += attendedSessions;
-
-            if (attendedSessions > 0) { // Only charge if they attended
+            if (attendedSessions > 0) {
                 if (cls.fee.type === FeeType.MONTHLY || cls.fee.type === FeeType.PER_COURSE) {
                     classFee = cls.fee.amount;
-                    const feeTypeStr = cls.fee.type === FeeType.MONTHLY ? 'tháng' : 'khóa';
-                    details += `- Lớp ${cls.name}: ${classFee.toLocaleString('vi-VN')} ₫ (${feeTypeStr})\n`;
+                    details += `- Lớp ${cls.name}: ${classFee.toLocaleString('vi-VN')} ₫\n`;
                 } else if (cls.fee.type === FeeType.PER_SESSION) {
                     classFee = attendedSessions * cls.fee.amount;
                     details += `- Lớp ${cls.name}: ${attendedSessions} buổi x ${cls.fee.amount.toLocaleString('vi-VN')} ₫ = ${classFee.toLocaleString('vi-VN')} ₫\n`;
@@ -326,124 +426,107 @@ export async function generateInvoices({ month, year }: { month: number, year: n
         }
 
         const transactionDescription = `Hóa đơn học phí tháng ${month}/${year}`;
-        const existingInvoiceIndex = appData.invoices.findIndex(inv => inv.studentId === student.id && inv.month === monthStr);
+        const existingInvoice = appData.invoices.find(inv => inv.studentId === student.id && inv.month === monthStr);
 
-        if (existingInvoiceIndex !== -1) { // Update existing invoice
-            const existingInvoice = appData.invoices[existingInvoiceIndex];
+        if (existingInvoice) {
             if (existingInvoice.status === 'UNPAID' && (totalAmount !== existingInvoice.amount)) {
                 const amountDifference = totalAmount - existingInvoice.amount;
-                appData.invoices[existingInvoiceIndex].amount = totalAmount;
-                appData.invoices[existingInvoiceIndex].details = details.trim();
-
-                const studentIndex = appData.students.findIndex(s => s.id === student.id);
-                if (studentIndex !== -1) appData.students[studentIndex].balance -= amountDifference;
-                
-                const relatedTransactionIndex = appData.transactions.findIndex(t => t.relatedInvoiceId === existingInvoice.id);
-                if(relatedTransactionIndex !== -1) {
-                    appData.transactions[relatedTransactionIndex].amount = -totalAmount;
-                }
+                existingInvoice.amount = totalAmount;
+                existingInvoice.details = details.trim();
+                const studentToUpdate = appData.students.find(s => s.id === student.id);
+                if (studentToUpdate) studentToUpdate.balance -= amountDifference;
+                const relatedTransaction = appData.transactions.find(t => t.relatedInvoiceId === existingInvoice.id);
+                if(relatedTransaction) relatedTransaction.amount = -totalAmount;
             }
-        } else if (totalAmount > 0) { // Create new invoice
+        } else if (totalAmount > 0) {
             const invoiceId = generateUniqueId('INV');
-            const newInvoice: Invoice = {
+            appData.invoices.push({
                 id: invoiceId, studentId: student.id, studentName: student.name, month: monthStr,
                 amount: totalAmount, details: details.trim(), status: 'UNPAID',
                 generatedDate: new Date().toISOString().split('T')[0], paidDate: null,
-            };
-            appData.invoices.push(newInvoice);
-
-            const newTransaction: Transaction = {
+            });
+            appData.transactions.push({
                 id: generateUniqueId('TRX'), studentId: student.id, date: new Date().toISOString().split('T')[0],
                 type: TransactionType.INVOICE, description: transactionDescription,
                 amount: -totalAmount, relatedInvoiceId: invoiceId,
-            };
-            appData.transactions.push(newTransaction);
-            
-            const studentIndex = appData.students.findIndex(s => s.id === student.id);
-            if (studentIndex !== -1) appData.students[studentIndex].balance -= totalAmount;
+            });
+            const studentToUpdate = appData.students.find(s => s.id === student.id);
+            if (studentToUpdate) studentToUpdate.balance -= totalAmount;
         }
     }
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function cancelInvoice(invoiceId: string): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const invoice = appData.invoices.find(inv => inv.id === invoiceId);
     if (!invoice || invoice.status === 'CANCELLED') return;
     if (invoice.status === 'PAID') throw new Error("Không thể hủy hóa đơn đã thanh toán.");
 
     invoice.status = 'CANCELLED';
-
-    const transaction: Transaction = {
+    appData.transactions.push({
         id: generateUniqueId('TRX'), studentId: invoice.studentId, date: new Date().toISOString().split('T')[0],
         type: TransactionType.ADJUSTMENT_CREDIT, description: `Hủy hóa đơn #${invoiceId}`,
         amount: invoice.amount, relatedInvoiceId: invoiceId,
-    };
-    appData.transactions.push(transaction);
-
+    });
     const student = appData.students.find(s => s.id === invoice.studentId);
     if (student) student.balance += invoice.amount;
 
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function addAdjustment(payload: { studentId: string; amount: number; date: string; description: string; type: 'CREDIT' | 'DEBIT' }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const finalAmount = payload.type === 'CREDIT' ? payload.amount : -payload.amount;
 
-    const transaction: Transaction = {
+    appData.transactions.push({
         id: generateUniqueId('TRX'), studentId: payload.studentId, date: payload.date,
         type: payload.type === 'CREDIT' ? TransactionType.PAYMENT : TransactionType.ADJUSTMENT_DEBIT,
         description: payload.description, amount: finalAmount,
-    };
-    appData.transactions.push(transaction);
-
+    });
     const student = appData.students.find(s => s.id === payload.studentId);
     if (student) student.balance += finalAmount;
     
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function updateTransaction(transaction: Transaction): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const oldTransaction = appData.transactions.find(t => t.id === transaction.id);
     if (!oldTransaction) throw new Error("Giao dịch không tồn tại.");
 
     const amountDifference = transaction.amount - oldTransaction.amount;
-    
     appData.transactions = appData.transactions.map(t => t.id === transaction.id ? transaction : t);
-    
     const student = appData.students.find(s => s.id === transaction.studentId);
     if (student) student.balance += amountDifference;
 
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export async function deleteTransaction(transactionId: string): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const transaction = appData.transactions.find(t => t.id === transactionId);
     if (!transaction) throw new Error("Giao dịch không tồn tại.");
 
     appData.transactions = appData.transactions.filter(t => t.id !== transactionId);
-    
     const student = appData.students.find(s => s.id === transaction.studentId);
     if (student) student.balance -= transaction.amount;
 
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export const updateInvoiceStatus = async ({ invoiceId, status }: { invoiceId: string, status: 'PAID' | 'UNPAID' | 'CANCELLED' }) => {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const invoice = appData.invoices.find(inv => inv.id === invoiceId);
     if (invoice) {
         invoice.status = status;
         if (status === 'PAID') invoice.paidDate = new Date().toISOString().split('T')[0];
-        setLocalData(appData);
+        await setLocalData(appData);
     }
 }
 
 export async function generatePayrolls({ month, year }: { month: number, year: number }): Promise<void> {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
 
     for(const teacher of appData.teachers.filter(t => t.status === PersonStatus.ACTIVE)) {
@@ -472,78 +555,91 @@ export async function generatePayrolls({ month, year }: { month: number, year: n
         };
 
         const existingIndex = appData.payrolls.findIndex(p => p.id === payrollId);
-        if (existingIndex !== -1) {
-            appData.payrolls[existingIndex] = newPayroll;
-        } else {
-            appData.payrolls.push(newPayroll);
-        }
+        if (existingIndex !== -1) appData.payrolls[existingIndex] = newPayroll;
+        else appData.payrolls.push(newPayroll);
     }
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 // --- Data Management ---
-export const backupData = async (): Promise<Omit<AppState, 'loading'>> => Promise.resolve(getLocalData());
-
-export async function restoreData(data: AppState): Promise<void> {
-    setLocalData(data);
-}
-
-export async function resetToMockData(): Promise<void> {
+export const backupData = async (): Promise<Omit<AppState, 'loading'>> => getLocalData();
+export const restoreData = async (data: AppState): Promise<void> => setLocalData(data);
+export const resetToMockData = async (): Promise<void> => {
     localStorage.removeItem(APP_DATA_KEY);
-    // getLocalData will create and save a fresh state with mock data
-    getLocalData();
+    await idbClear(HANDLE_KEY);
+    const mockData = getMockDataState();
+    await setLocalData(mockData);
 }
 
 export const deleteAttendanceForDate = async ({ classId, date }: { classId: string, date: string }) => {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     appData.attendance = appData.attendance.filter(a => !(a.classId === classId && a.date === date));
-    setLocalData(appData);
+    await setLocalData(appData);
 }
 
 export const updateUserPassword = async ({ userId, role, newPassword }: { userId: string, role: UserRole, newPassword: string }) => {
-    const appData = getLocalData();
-    let user: Student | Teacher | Staff | undefined;
+    const appData = await getLocalData();
+    let userList: (Student | Teacher | Staff)[];
     switch (role) {
-        case UserRole.PARENT: user = appData.students.find(u => u.id === userId); break;
-        case UserRole.TEACHER: user = appData.teachers.find(u => u.id === userId); break;
-        case UserRole.MANAGER:
-        case UserRole.ACCOUNTANT: user = appData.staff.find(u => u.id === userId); break;
-        default: throw new Error('Invalid role for password update.');
+        case UserRole.PARENT: userList = appData.students; break;
+        case UserRole.TEACHER: userList = appData.teachers; break;
+        case UserRole.MANAGER: case UserRole.ACCOUNTANT: userList = appData.staff; break;
+        default: throw new Error('Vai trò không hợp lệ để cập nhật mật khẩu.');
     }
+    const user = userList.find(u => u.id === userId);
     if (user) {
         user.password = newPassword;
-        setLocalData(appData);
+        await setLocalData(appData);
     } else {
-        throw new Error('User not found.');
+        throw new Error('Không tìm thấy người dùng.');
     }
 }
 
 export const clearCollections = async (collectionKeys: ('students' | 'teachers' | 'staff' | 'classes')[]) => {
-    const appData = getLocalData();
-    for (const key of collectionKeys) {
-        (appData[key] as any) = [];
-        if (key === 'students') {
-            appData.attendance = [];
-            appData.invoices = [];
-            appData.progressReports = [];
-            appData.transactions = [];
-            appData.classes = appData.classes.map(c => ({...c, studentIds: []}));
-        }
-        if (key === 'teachers') {
-            appData.payrolls = [];
-            appData.classes = appData.classes.map(c => ({...c, teacherIds: []}));
-        }
-        if (key === 'classes') {
-            appData.attendance = [];
-            appData.progressReports = [];
-        }
+    const appData = await getLocalData();
+    for (const key of collectionKeys) { (appData[key] as any) = []; }
+    if (collectionKeys.includes('students')) {
+        appData.attendance = []; appData.invoices = []; appData.progressReports = []; appData.transactions = [];
+        appData.classes = appData.classes.map(c => ({...c, studentIds: []}));
     }
-    setLocalData(appData);
+    if (collectionKeys.includes('teachers')) {
+        appData.payrolls = [];
+        appData.classes = appData.classes.map(c => ({...c, teacherIds: []}));
+    }
+    if (collectionKeys.includes('classes')) { appData.attendance = []; appData.progressReports = []; }
+    await setLocalData(appData);
 }
 
 export const deleteAttendanceByMonth = async ({ month, year }: { month: number, year: number }) => {
-    const appData = getLocalData();
+    const appData = await getLocalData();
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
     appData.attendance = appData.attendance.filter(a => !a.date.startsWith(monthStr));
-    setLocalData(appData);
+    await setLocalData(appData);
+}
+
+// --- NEW STORAGE MIGRATION FUNCTIONS ---
+export async function migrateToFSA(): Promise<FileSystemFileHandle> {
+    const handle = await window.showSaveFilePicker({
+      types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+      suggestedName: 'EduCenterPro_Data.json',
+    });
+    const currentData = await getLocalData();
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(currentData, null, 2));
+    await writable.close();
+    await idbSet(HANDLE_KEY, handle);
+    localStorage.removeItem(APP_DATA_KEY);
+    return handle;
+}
+
+export async function migrateToLocalStorage() {
+    const { method, handle } = await checkStorageMethod();
+    if (method === 'fs' && handle) {
+        const hasPermission = await verifyPermission(handle, false);
+        if (!hasPermission) throw new Error("Không có quyền đọc tệp dữ liệu để di chuyển.");
+        const file = await handle.getFile();
+        const contents = await file.text();
+        localStorage.setItem(APP_DATA_KEY, contents);
+        await idbClear(HANDLE_KEY);
+    }
 }
