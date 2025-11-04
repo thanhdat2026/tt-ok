@@ -142,6 +142,7 @@ export const FinanceScreen: React.FC = () => {
         );
     }
     
+    const canViewFinance = role === UserRole.ADMIN || role === UserRole.ACCOUNTANT || role === UserRole.MANAGER;
     const canManageFullFinance = role === UserRole.ADMIN || role === UserRole.ACCOUNTANT;
 
     return (
@@ -149,12 +150,12 @@ export const FinanceScreen: React.FC = () => {
             <h1 className="text-3xl font-bold">Quản lý Tài chính</h1>
 
             <div className="flex flex-wrap items-center gap-2 border-b dark:border-gray-700 pb-2">
-                <TabButton tabId="overview" hidden={!canManageFullFinance}>Tổng quan</TabButton>
-                <TabButton tabId="invoices" hidden={!canManageFullFinance}>Hóa đơn</TabButton>
-                <TabButton tabId="debt_report" hidden={!canManageFullFinance}>Công nợ</TabButton>
-                <TabButton tabId="income" hidden={!canManageFullFinance}>Thu khác</TabButton>
-                <TabButton tabId="expenses" hidden={!canManageFullFinance}>Chi phí</TabButton>
-                <TabButton tabId="payroll" hidden={!canManageFullFinance}>Bảng lương</TabButton>
+                <TabButton tabId="overview" hidden={!canViewFinance}>Tổng quan</TabButton>
+                <TabButton tabId="invoices" hidden={!canViewFinance}>Hóa đơn</TabButton>
+                <TabButton tabId="debt_report" hidden={!canViewFinance}>Công nợ</TabButton>
+                <TabButton tabId="income" hidden={!canViewFinance}>Thu khác</TabButton>
+                <TabButton tabId="expenses" hidden={!canViewFinance}>Chi phí</TabButton>
+                <TabButton tabId="payroll" hidden={!canViewFinance}>Bảng lương</TabButton>
                 <TabButton tabId="my_payroll" hidden={role !== UserRole.TEACHER}>Bảng lương của tôi</TabButton>
             </div>
             
@@ -170,12 +171,12 @@ export const FinanceScreen: React.FC = () => {
             )}
 
             <div>
-                {activeTab === 'overview' && canManageFullFinance && <OverviewTab period={period} />}
-                {activeTab === 'invoices' && canManageFullFinance && <InvoicesTab />}
-                {activeTab === 'debt_report' && canManageFullFinance && <UnpaidStudentsReport />}
-                {activeTab === 'income' && canManageFullFinance && <IncomeTab />}
-                {activeTab === 'expenses' && canManageFullFinance && <ExpenseTab />}
-                {activeTab === 'payroll' && canManageFullFinance && <PayrollTab period={period} />}
+                {activeTab === 'overview' && canViewFinance && <OverviewTab period={period} />}
+                {activeTab === 'invoices' && canViewFinance && <InvoicesTab />}
+                {activeTab === 'debt_report' && canViewFinance && <UnpaidStudentsReport />}
+                {activeTab === 'income' && canViewFinance && <IncomeTab />}
+                {activeTab === 'expenses' && canViewFinance && <ExpenseTab />}
+                {activeTab === 'payroll' && canViewFinance && <PayrollTab period={period} />}
                 {activeTab === 'my_payroll' && role === UserRole.TEACHER && <TeacherPayrollTab period={period} />}
             </div>
         </div>

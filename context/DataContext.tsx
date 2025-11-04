@@ -1,23 +1,11 @@
 import React, { createContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { Student, Teacher, Staff, Class, AttendanceRecord, Invoice, ProgressReport, Income, Expense, CenterSettings, Payroll, Announcement, Transaction, UserRole } from '../types';
 import * as api from '../services/api';
+import { AppData } from '../services/api';
 import { MOCK_SETTINGS } from '../services/mockData';
 
 
-interface AppState {
-  students: Student[];
-  teachers: Teacher[];
-  staff: Staff[];
-  classes: Class[];
-  attendance: AttendanceRecord[];
-  invoices: Invoice[];
-  progressReports: ProgressReport[];
-  transactions: Transaction[];
-  income: Income[];
-  expenses: Expense[];
-  settings: CenterSettings;
-  payrolls: Payroll[];
-  announcements: Announcement[];
+interface AppState extends AppData {
   loading: boolean;
 }
 
@@ -72,8 +60,8 @@ interface DataContextType {
     deleteExpense: (itemId: string) => Promise<void>;
     updateSettings: (settings: CenterSettings) => Promise<void>;
     completeOnboardingStep: (step: string) => Promise<void>;
-    backupData: () => Promise<Omit<AppState, 'loading'>>;
-    restoreData: (data: Omit<AppState, 'loading'>) => Promise<void>;
+    backupData: () => Promise<AppData>;
+    restoreData: (data: AppData) => Promise<void>;
     resetToMockData: () => Promise<void>;
     addAnnouncement: (data: Omit<Announcement, 'id'>) => Promise<void>;
     deleteAnnouncement: (id: string) => Promise<void>;
@@ -260,7 +248,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     generatePayrolls: createRefreshingFunc(api.generatePayrolls),
     completeOnboardingStep: createRefreshingFunc(api.completeOnboardingStep),
     backupData: api.backupData,
-    restoreData: createRefreshingFunc(api.restoreData as any),
+    restoreData: createRefreshingFunc(api.restoreData),
     resetToMockData: async () => {
         await api.resetToMockData();
         await refreshData();

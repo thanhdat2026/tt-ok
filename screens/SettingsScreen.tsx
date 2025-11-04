@@ -206,7 +206,7 @@ export const SettingsScreen: React.FC = () => {
             try {
                 const text = e.target?.result as string;
                 const restoredData = JSON.parse(text);
-                if (restoredData.students && (restoredData.settings || restoredData.centerInfo)) {
+                if (restoredData.students && restoredData.settings) {
                     setRestoreConfirm({ open: true, data: restoredData });
                 } else { throw new Error("File sao lưu không hợp lệ"); }
             } catch (error) {

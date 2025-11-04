@@ -29,7 +29,7 @@ import { MOCK_STUDENTS, MOCK_TEACHERS, MOCK_STAFF, MOCK_CLASSES, MOCK_ATTENDANCE
 
 const APP_DATA_KEY = 'educenter_pro_data';
 
-interface AppState {
+export interface AppData {
   students: Student[];
   teachers: Teacher[];
   staff: Staff[];
@@ -120,7 +120,7 @@ export async function checkStorageMethod(): Promise<{ method: 'fs' | 'local'; ha
 }
 
 
-function getMockDataState(): AppState {
+function getMockDataState(): AppData {
     return {
         students: MOCK_STUDENTS,
         teachers: MOCK_TEACHERS,
@@ -141,7 +141,7 @@ function getMockDataState(): AppState {
 
 // --- Data Store Management ---
 
-async function getLocalData(): Promise<AppState> {
+async function getLocalData(): Promise<AppData> {
     const { method, handle } = await checkStorageMethod();
     
     if (method === 'fs' && handle) {
@@ -175,7 +175,7 @@ async function getLocalData(): Promise<AppState> {
     return mockData;
 }
 
-async function setLocalData(data: AppState) {
+async function setLocalData(data: AppData) {
      const { method, handle } = await checkStorageMethod();
      if (method === 'fs' && handle) {
         try {
@@ -197,13 +197,13 @@ async function setLocalData(data: AppState) {
 
 // --- API Functions ---
 
-export async function loadInitialData(): Promise<AppState> {
+export async function loadInitialData(): Promise<AppData> {
     return getLocalData();
 }
 
 const generateUniqueId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-async function addDoc<T extends { id: string }>(collectionName: keyof Omit<AppState, 'settings'>, newItem: T): Promise<T> {
+async function addDoc<T extends { id: string }>(collectionName: keyof Omit<AppData, 'settings'>, newItem: T): Promise<T> {
     const appData = await getLocalData();
     const collection = appData[collectionName] as unknown as T[];
     if (collection.some(item => item.id === newItem.id)) {
@@ -215,7 +215,7 @@ async function addDoc<T extends { id: string }>(collectionName: keyof Omit<AppSt
 }
 
 
-async function updateDoc<T extends { id: string }>(collectionName: keyof Omit<AppState, 'settings'>, docId: string, data: T): Promise<void> {
+async function updateDoc<T extends { id: string }>(collectionName: keyof Omit<AppData, 'settings'>, docId: string, data: T): Promise<void> {
     const appData = await getLocalData();
     const collection = appData[collectionName] as any[];
     
@@ -227,7 +227,7 @@ async function updateDoc<T extends { id: string }>(collectionName: keyof Omit<Ap
     await setLocalData(appData);
 }
 
-async function deleteDoc(collectionName: keyof Omit<AppState, 'settings'>, docId: string): Promise<void> {
+async function deleteDoc(collectionName: keyof Omit<AppData, 'settings'>, docId: string): Promise<void> {
     const appData = await getLocalData();
     const collection = appData[collectionName] as any[];
     appData[collectionName] = collection.filter((item: any) => item.id !== docId) as any;
@@ -328,6 +328,7 @@ export async function deleteTeacher(teacherId: string): Promise<void> {
     const appData = await getLocalData();
     appData.teachers = appData.teachers.filter(t => t.id !== teacherId);
     appData.classes = appData.classes.map(c => ({...c, teacherIds: c.teacherIds.filter(id => id !== teacherId)}));
+    appData.payrolls = appData.payrolls.filter(p => p.teacherId !== teacherId);
     await setLocalData(appData);
 }
 
@@ -356,6 +357,7 @@ export async function deleteClass(classId: string): Promise<void> {
     appData.classes = appData.classes.filter(c => c.id !== classId);
     appData.attendance = appData.attendance.filter(a => a.classId !== classId);
     appData.progressReports = appData.progressReports.filter(pr => pr.classId !== classId);
+    appData.announcements = appData.announcements.filter(ann => ann.classId !== classId);
     await setLocalData(appData);
 }
 
@@ -383,16 +385,37 @@ export async function completeOnboardingStep(step: string): Promise<void> {
 // --- Complex Operations ---
 export async function updateAttendance(records: AttendanceRecord[]): Promise<void> {
     const appData = await getLocalData();
-    const recordsMap = new Map(records.map(r => [`${r.classId}-${r.date}-${r.studentId}`, r]));
-    const updatedAttendance = appData.attendance.filter(existing => {
-        const key = `${existing.classId}-${existing.date}-${existing.studentId}`;
-        return !recordsMap.has(key);
+
+    // Group records by class and date to handle batch updates correctly
+    const recordsByClassDate = new Map<string, AttendanceRecord[]>();
+    records.forEach(r => {
+        const key = `${r.classId}|${r.date}`;
+        if (!recordsByClassDate.has(key)) {
+            recordsByClassDate.set(key, []);
+        }
+        recordsByClassDate.get(key)!.push(r);
     });
-    records.forEach(record => {
-        const recordWithId = { ...record, id: record.id || generateUniqueId('ATT') };
-        updatedAttendance.push(recordWithId);
+
+    // If no records are passed, do nothing. This prevents accidental data deletion.
+    if (recordsByClassDate.size === 0) {
+        return;
+    }
+
+    // For each class/date group, remove old records and add the new ones
+    recordsByClassDate.forEach((newRecords, key) => {
+        const [classId, date] = key.split('|');
+        
+        // Filter out all existing records for this specific class and date
+        appData.attendance = appData.attendance.filter(a => !(a.classId === classId && a.date === date));
+        
+        // Add the new records, ensuring they have unique IDs
+        const recordsWithIds = newRecords.map(record => ({
+            ...record,
+            id: record.id || generateUniqueId('ATT'),
+        }));
+        appData.attendance.push(...recordsWithIds);
     });
-    appData.attendance = updatedAttendance;
+    
     await setLocalData(appData);
 }
 
@@ -562,8 +585,8 @@ export async function generatePayrolls({ month, year }: { month: number, year: n
 }
 
 // --- Data Management ---
-export const backupData = async (): Promise<Omit<AppState, 'loading'>> => getLocalData();
-export const restoreData = async (data: AppState): Promise<void> => setLocalData(data);
+export const backupData = async (): Promise<AppData> => getLocalData();
+export const restoreData = async (data: AppData): Promise<void> => setLocalData(data);
 export const resetToMockData = async (): Promise<void> => {
     localStorage.removeItem(APP_DATA_KEY);
     await idbClear(HANDLE_KEY);

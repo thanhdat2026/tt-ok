@@ -202,7 +202,12 @@ export const StudentDetailScreen: React.FC = () => {
         if (!studentTransactions) return [];
         let runningBalance = 0;
         return [...studentTransactions]
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .sort((a, b) => {
+                const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+                if (dateComparison !== 0) return dateComparison;
+                // If dates are the same, sort by ID to maintain creation order
+                return a.id.localeCompare(b.id);
+            })
             .map(t => {
                 runningBalance += t.amount;
                 return { ...t, endingBalance: runningBalance };
@@ -221,7 +226,8 @@ export const StudentDetailScreen: React.FC = () => {
                     const bDate = new Date(b.date).getTime();
                     if (aDate < bDate) return transactionSortConfig.direction === 'ascending' ? -1 : 1;
                     if (aDate > bDate) return transactionSortConfig.direction === 'ascending' ? 1 : -1;
-                    return 0;
+                    // If dates are also the same, use ID as a tie-breaker
+                    return a.id.localeCompare(b.id);
                 }
                 
                 if (aValue == null || bValue == null) return 0;
@@ -231,7 +237,8 @@ export const StudentDetailScreen: React.FC = () => {
                 return 0;
             });
         }
-        return sortableItems;
+        // Apply descending sort to the already chronologically calculated array by default
+        return sortableItems.reverse();
     }, [transactionsWithEndingBalance, transactionSortConfig]);
 
     const handleTransactionSort = (key: keyof (Transaction & { endingBalance: number })) => {
