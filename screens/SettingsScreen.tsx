@@ -179,7 +179,7 @@ export const SettingsScreen: React.FC = () => {
         }
     };
     
-    const handleBackup = async () => {
+    const handleSaveACopy = async () => {
         try {
             const dataToBackup = await backupData();
             const dataStr = JSON.stringify(dataToBackup, null, 2);
@@ -192,7 +192,7 @@ export const SettingsScreen: React.FC = () => {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            toast.success('Sao lưu dữ liệu thành công!');
+            toast.success('Đã tải về bản sao lưu thành công!');
         } catch (error) {
             toast.error('Sao lưu thất bại.');
         }
@@ -317,30 +317,39 @@ export const SettingsScreen: React.FC = () => {
             <h1 className="text-3xl font-bold">Cài đặt</h1>
 
              <div className="card-base">
-                <h2 className="text-2xl font-bold mb-6">Lưu trữ Dữ liệu</h2>
-                {api.isFileSystemSupported() ? (
-                    storageMethod === 'fs' ? (
-                        <div>
-                            <p className="text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 p-3 rounded-md mb-4">
-                                <strong className="font-semibold">Trạng thái:</strong> Dữ liệu đang được lưu an toàn vào tệp <code className="font-mono bg-black/10 px-1 rounded">{fileName}</code>.
-                            </p>
-                            <Button variant="secondary" onClick={handleSwitchToLocal} isLoading={isMigrating} disabled={isViewer}>
-                                Chuyển về Lưu trữ trên Trình duyệt
-                            </Button>
+                <h2 className="text-2xl font-bold mb-4">Lưu trữ Dữ liệu</h2>
+                {!api.isFileSystemSupported() ? (
+                    <p className="text-gray-500">Trình duyệt của bạn không hỗ trợ các tính năng lưu trữ nâng cao. Dữ liệu sẽ được lưu cục bộ trong trình duyệt, việc này có thể không an toàn. Vui lòng sử dụng trình duyệt Chrome hoặc Edge trên máy tính để có trải nghiệm tốt nhất.</p>
+                ) : storageMethod === 'fs' ? (
+                     <div className="space-y-4">
+                        <div className="text-green-800 dark:text-green-300 bg-green-50 dark:bg-green-900/20 p-4 rounded-md border border-green-200 dark:border-green-700">
+                            <strong className="font-semibold block text-base">Phương thức: Tự động lưu vào Tệp Cục bộ (An toàn & Khuyến nghị)</strong>
+                            <p className="mt-2">Mọi thay đổi của bạn đều được lưu ngay lập tức vào tệp <code className="font-mono bg-black/10 dark:bg-white/10 px-1 rounded">{fileName}</code>. Đây là cách an toàn và mạnh mẽ nhất để quản lý dữ liệu.</p>
+                            
+                            <div className="mt-4 pt-3 border-t border-green-200 dark:border-green-700">
+                                <strong className="font-semibold block">Cách sao lưu tự động và tức thời lên Google Drive:</strong>
+                                <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                                    <li><strong className="font-semibold">Trên Máy tính:</strong> Lưu tệp dữ liệu này vào thư mục "Google Drive" trên máy tính của bạn. Ứng dụng Google Drive sẽ <strong className="text-green-900 dark:text-green-200">tự động sao lưu tức thời</strong> mỗi khi có thay đổi.</li>
+                                    <li><strong className="font-semibold">Trên Điện thoại:</strong> Sử dụng nút <strong className="text-green-900 dark:text-green-200">"Lưu một bản sao"</strong> ở mục "Thao tác Dữ liệu" bên dưới. Sau đó, chọn "Google Drive" từ màn hình chia sẻ của điện thoại để tải tệp lên.</li>
+                                </ul>
+                            </div>
                         </div>
-                    ) : (
-                        <div>
-                            <p className="text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md mb-4">
-                                <strong className="font-semibold">Trạng thái:</strong> Dữ liệu đang được lưu trong trình duyệt. Dữ liệu có thể bị mất nếu bạn xóa lịch sử duyệt web.
-                            </p>
-                            <Button onClick={handleSwitchToFile} isLoading={isMigrating} disabled={isViewer}>
-                                {ICONS.backup} Chọn Tệp Dữ liệu để Lưu trữ An toàn
-                            </Button>
-                             <p className="text-xs text-gray-500 mt-2">Thao tác này sẽ di chuyển dữ liệu hiện tại vào một tệp bạn chọn. Ứng dụng sẽ cần quyền truy cập tệp này mỗi khi khởi động.</p>
-                        </div>
-                    )
+                        <Button variant="secondary" onClick={handleSwitchToLocal} isLoading={isMigrating} disabled={isViewer}>
+                            Chuyển về Lưu trên Trình duyệt
+                        </Button>
+                    </div>
                 ) : (
-                    <p className="text-gray-500">Trình duyệt của bạn không hỗ trợ tính năng lưu trữ vào tệp. Dữ liệu sẽ được lưu cục bộ trong trình duyệt.</p>
+                     <div className="space-y-4">
+                        <p className="text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md border border-yellow-300 dark:border-yellow-700">
+                            <strong className="font-semibold block">Phương thức: Lưu trên Trình duyệt (Tiện lợi, kém an toàn)</strong>
+                            Dữ liệu được lưu trong bộ nhớ trình duyệt. Phương pháp này tiện lợi để dùng thử nhưng có nguy cơ mất dữ liệu nếu bạn xóa cache, đổi trình duyệt hoặc sử dụng trên thiết bị khác.
+                             <br/><strong className="mt-2 block">Chúng tôi đặc biệt khuyến nghị chuyển sang phương thức Lưu vào Tệp để đảm bảo an toàn tuyệt đối và có thể sao lưu lên cloud.</strong>
+                        </p>
+                        <Button onClick={handleSwitchToFile} isLoading={isMigrating} disabled={isViewer}>
+                            {ICONS.backup} Chuyển sang Lưu vào Tệp (An toàn hơn)
+                        </Button>
+                         <p className="text-xs text-gray-500 dark:text-gray-400">Thao tác này sẽ di chuyển toàn bộ dữ liệu hiện tại vào một tệp trên máy tính của bạn. Mọi thay đổi sau này sẽ được tự động lưu vào tệp đó.</p>
+                    </div>
                 )}
             </div>
             
@@ -462,17 +471,19 @@ export const SettingsScreen: React.FC = () => {
             )}
 
             <div className="card-base">
-                <h2 className="text-2xl font-bold mb-6">Quản lý Dữ liệu</h2>
+                <h2 className="text-2xl font-bold mb-6">Thao tác Dữ liệu</h2>
                 <div className="space-y-6">
                      <div className="p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-gray-700 rounded-lg">
-                        <h3 className="font-semibold text-blue-800 dark:text-blue-200">Sao lưu & Phục hồi Thủ công</h3>
-                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-3">Tạo bản sao lưu toàn bộ dữ liệu hoặc phục hồi từ một file sao lưu.</p>
+                        <h3 className="font-semibold text-blue-800 dark:text-blue-200">Sao lưu Thủ công & Phục hồi</h3>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-3">
+                           Tạo một bản sao của dữ liệu tại một thời điểm nhất định (ví dụ: cuối tháng) để lưu trữ riêng. Trên điện thoại, đây là cách để bạn sao lưu tệp dữ liệu lên Google Drive hoặc dịch vụ đám mây khác.
+                        </p>
                         <div className="flex flex-col sm:flex-row gap-4">
-                            <Button onClick={handleBackup} variant="secondary" disabled={isViewer}>
-                                {ICONS.backup} Sao lưu Dữ liệu
+                            <Button onClick={handleSaveACopy} variant="secondary" disabled={isViewer}>
+                                {ICONS.backup} Lưu một bản sao
                             </Button>
                             <label htmlFor="restore-input" className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold bg-blue-600 text-white ${isViewer ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700 cursor-pointer'}`}>
-                                {ICONS.restore} Phục hồi từ File
+                                {ICONS.restore} Phục hồi từ Tệp
                             </label>
                             <input id="restore-input" type="file" accept=".json" onChange={handleRestoreFileSelect} className="hidden" disabled={isViewer} />
                         </div>
