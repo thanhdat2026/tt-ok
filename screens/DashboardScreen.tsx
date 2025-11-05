@@ -152,6 +152,53 @@ const HighAbsenceWidget: React.FC<{ students: Student[], attendance: AttendanceR
     );
 };
 
+const HighLateArrivalsWidget: React.FC<{ students: Student[], attendance: AttendanceRecord[] }> = ({ students, attendance }) => {
+    const highLateArrivalsStudents = useMemo(() => {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+        const lateCounts = new Map<string, number>();
+        
+        const activeStudentIds = new Set(students.filter(s => s.status === PersonStatus.ACTIVE).map(s => s.id));
+
+        attendance.forEach(record => {
+            if (activeStudentIds.has(record.studentId) && record.status === AttendanceStatus.LATE && record.date >= thirtyDaysAgoStr) {
+                lateCounts.set(record.studentId, (lateCounts.get(record.studentId) || 0) + 1);
+            }
+        });
+        
+        const studentMap = new Map(students.map(s => [s.id, s.name]));
+
+        return Array.from(lateCounts.entries())
+            .map(([studentId, count]) => ({ studentId, studentName: studentMap.get(studentId), count }))
+            .filter(item => item.studentName && item.count > 0)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+    }, [students, attendance]);
+
+    return (
+        <Link to="/reports" state={{ defaultReport: 'attendance' }} className="block hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors">
+            <div className="card-base">
+                <h2 className="text-xl font-bold mb-4">Cảnh báo: Học viên đi học muộn nhiều</h2>
+                <p className="text-xs text-gray-400 -mt-3 mb-3">(Trong 30 ngày qua)</p>
+                <div className="space-y-3">
+                    {highLateArrivalsStudents.length > 0 ? (
+                        highLateArrivalsStudents.map(item => (
+                            <div key={item.studentId} className="flex justify-between items-center text-sm">
+                                <span className="font-semibold">{item.studentName}</span>
+                                <span className="font-bold text-orange-600 dark:text-orange-400">{item.count} buổi</span>
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">Không có học viên nào đi muộn trong 30 ngày qua.</p>
+                    )}
+                </div>
+            </div>
+        </Link>
+    );
+};
+
 
 const AdminDashboard: React.FC = () => {
     const { state } = useData();
@@ -215,6 +262,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="lg:col-span-1 space-y-6">
                     <HighDebtWidget students={students} />
                     <HighAbsenceWidget students={students} attendance={attendance} />
+                    <HighLateArrivalsWidget students={students} attendance={attendance} />
                     <AnnouncementsWidget announcements={announcements} />
                 </div>
             </div>
