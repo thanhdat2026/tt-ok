@@ -11,7 +11,7 @@ import { ForgotPasswordModal } from '../components/auth/ChangePasswordModal';
 const BrandHeader: React.FC<{ settings: CenterSettings }> = ({ settings }) => {
     const { loginHeaderContent } = settings;
 
-    const defaultContent = `<p>Hệ thống quản lý giáo dục thông minh</p>`;
+    const defaultContent = `<p class="text-lg leading-7 text-indigo-200">Hệ thống quản lý dạy thêm, trung tâm thông minh.<br/>Toàn diện, hiệu quả và dễ sử dụng.</p>`;
 
     return (
         <div className="text-center md:text-left">

@@ -205,7 +205,6 @@ export const StudentDetailScreen: React.FC = () => {
             .sort((a, b) => {
                 const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
                 if (dateComparison !== 0) return dateComparison;
-                // If dates are the same, sort by ID to maintain creation order
                 return a.id.localeCompare(b.id);
             })
             .map(t => {
@@ -218,17 +217,17 @@ export const StudentDetailScreen: React.FC = () => {
         let sortableItems = [...transactionsWithEndingBalance];
         if (transactionSortConfig) {
             sortableItems.sort((a, b) => {
-                const aValue = a[transactionSortConfig.key];
-                const bValue = b[transactionSortConfig.key];
-
-                if(transactionSortConfig.key === 'date') {
+                if (transactionSortConfig.key === 'date') {
                     const aDate = new Date(a.date).getTime();
                     const bDate = new Date(b.date).getTime();
                     if (aDate < bDate) return transactionSortConfig.direction === 'ascending' ? -1 : 1;
                     if (aDate > bDate) return transactionSortConfig.direction === 'ascending' ? 1 : -1;
-                    // If dates are also the same, use ID as a tie-breaker
-                    return a.id.localeCompare(b.id);
+                    // If dates are also the same, use ID as a tie-breaker for stable sort
+                    return transactionSortConfig.direction === 'ascending' ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id);
                 }
+                
+                const aValue = a[transactionSortConfig.key];
+                const bValue = b[transactionSortConfig.key];
                 
                 if (aValue == null || bValue == null) return 0;
 
@@ -237,8 +236,7 @@ export const StudentDetailScreen: React.FC = () => {
                 return 0;
             });
         }
-        // Apply descending sort to the already chronologically calculated array by default
-        return sortableItems.reverse();
+        return sortableItems;
     }, [transactionsWithEndingBalance, transactionSortConfig]);
 
     const handleTransactionSort = (key: keyof (Transaction & { endingBalance: number })) => {
@@ -525,7 +523,7 @@ export const StudentDetailScreen: React.FC = () => {
                 title="Xác nhận Xóa Giao dịch"
                 message={<p>Bạn có chắc muốn xóa giao dịch "<strong>{deleteConfirm.item?.description}</strong>"? Hành động này sẽ hoàn lại số tiền vào số dư của học viên.</p>}
             />
-            <PaymentModal
+             <PaymentModal
                 isOpen={paymentModalOpen}
                 onClose={() => setPaymentModalOpen(false)}
                 student={student}

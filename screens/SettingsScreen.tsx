@@ -101,7 +101,7 @@ const AdminPasswordSettings: React.FC = () => {
 
 
 export const SettingsScreen: React.FC = () => {
-    const { state, updateSettings, backupData, restoreData, resetToMockData, clearCollections, deleteAttendanceByMonth, refreshData } = useData();
+    const { state, updateSettings, backupData, restoreData, resetToMockData, clearCollections, deleteAttendanceByMonth, refreshData, clearAllTransactions } = useData();
     const { toast } = useToast();
     const { role } = useAuth();
     const [settings, setSettings] = useState<CenterSettings>(state.settings);
@@ -112,6 +112,7 @@ export const SettingsScreen: React.FC = () => {
     const [collectionsToClear, setCollectionsToClear] = useState<('students' | 'teachers' | 'staff' | 'classes')[]>([]);
     const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
     const [confirmDeleteAtt, setConfirmDeleteAtt] = useState(false);
+    const [clearTransactionsConfirmOpen, setClearTransactionsConfirmOpen] = useState(false);
     
     const [deleteAttMonth, setDeleteAttMonth] = useState(new Date().getMonth() + 1);
     const [deleteAttYear, setDeleteAttYear] = useState(new Date().getFullYear());
@@ -266,6 +267,16 @@ export const SettingsScreen: React.FC = () => {
             toast.error('Lỗi khi xóa dữ liệu điểm danh.');
         } finally {
             setConfirmDeleteAtt(false);
+        }
+    };
+    const handleConfirmClearTransactions = async () => {
+        try {
+            await clearAllTransactions();
+            toast.success('Đã xóa toàn bộ lịch sử giao dịch và hóa đơn. Số dư của tất cả học viên đã được đặt lại về 0.');
+        } catch (error) {
+            toast.error('Lỗi khi xóa dữ liệu giao dịch.');
+        } finally {
+            setClearTransactionsConfirmOpen(false);
         }
     };
 
@@ -447,12 +458,12 @@ export const SettingsScreen: React.FC = () => {
             {role === UserRole.ADMIN && (
                 <div className="card-base">
                     <h2 className="text-2xl font-bold mb-6">Quản lý Tài khoản Viewer</h2>
-                    <div className="flex items-center justify-between p-4 border rounded-lg dark:border-gray-600">
-                        <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 border rounded-lg dark:border-gray-600">
+                        <div className="flex-1">
                             <h4 className="font-semibold text-gray-800 dark:text-gray-200">Tài khoản Viewer (Chỉ đọc)</h4>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Cho phép đăng nhập với quyền xem toàn bộ dữ liệu nhưng không thể chỉnh sửa.</p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input
                                 type="checkbox"
                                 name="viewerAccountActive"
@@ -522,7 +533,7 @@ export const SettingsScreen: React.FC = () => {
                         <div className="mt-6 pt-4 border-t border-red-200 dark:border-red-700">
                             <h4 className="font-semibold">Xóa Dữ liệu Điểm danh theo Tháng</h4>
                             <p className="text-sm text-red-700 dark:text-red-300 mt-1 mb-3">Thao tác này sẽ xóa vĩnh viễn toàn bộ dữ liệu điểm danh trong tháng đã chọn. Dùng để dọn dẹp dữ liệu.</p>
-                             <div className="flex items-center gap-4">
+                             <div className="flex flex-wrap items-center gap-4">
                                 <select value={deleteAttMonth} onChange={e => setDeleteAttMonth(Number(e.target.value))} className="form-select w-auto" disabled={isViewer}>
                                     {months.map(m => <option key={m} value={m}>Tháng {m}</option>)}
                                 </select>
@@ -533,6 +544,14 @@ export const SettingsScreen: React.FC = () => {
                                     Xóa Điểm danh
                                 </Button>
                             </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-red-200 dark:border-red-700">
+                            <h4 className="font-semibold">Xóa Toàn bộ Lịch sử Giao dịch</h4>
+                            <p className="text-sm text-red-700 dark:text-red-300 mt-1 mb-3">Thao tác này sẽ xóa vĩnh viễn TẤT CẢ giao dịch và hóa đơn của TOÀN BỘ học viên, đồng thời đặt lại số dư của mọi người về 0. Hành động này không thể hoàn tác.</p>
+                            <Button variant="danger" onClick={() => setClearTransactionsConfirmOpen(true)} disabled={isViewer}>
+                                Xóa Lịch sử Giao dịch
+                            </Button>
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-red-200 dark:border-red-700">
@@ -579,6 +598,21 @@ export const SettingsScreen: React.FC = () => {
                 onConfirm={handleDeleteAttendanceByMonth}
                 title="Xác nhận Xóa Dữ liệu Điểm danh"
                 message={`Bạn có chắc chắn muốn xóa vĩnh viễn toàn bộ dữ liệu điểm danh trong tháng ${deleteAttMonth}/${deleteAttYear}? Hành động này không thể hoàn tác.`}
+            />
+             <ConfirmationModal
+                isOpen={clearTransactionsConfirmOpen}
+                onClose={() => setClearTransactionsConfirmOpen(false)}
+                onConfirm={handleConfirmClearTransactions}
+                title="Xác nhận Xóa Toàn bộ Giao dịch"
+                message={
+                    <p>
+                        Bạn có chắc chắn muốn xóa toàn bộ lịch sử giao dịch và hóa đơn không?
+                        <br/><br/>
+                        <span className="font-bold">Hành động này sẽ đặt lại số dư của TẤT CẢ học viên về 0 và không thể hoàn tác.</span>
+                    </p>
+                }
+                confirmationKeyword="XÓA GIAO DỊCH"
+                confirmButtonVariant="danger"
             />
         </div>
     );

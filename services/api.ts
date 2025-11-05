@@ -321,6 +321,7 @@ export async function updateTeacher({ originalId, updatedTeacher }: { originalId
         appData.classes = appData.classes.map(c => ({...c, teacherIds: c.teacherIds.map(tid => tid === originalId ? updatedTeacher.id : tid)}));
     }
     appData.teachers = appData.teachers.map(t => t.id === originalId ? updatedTeacher : t);
+    appData.payrolls = appData.payrolls.filter(p => p.teacherId !== originalId);
     await setLocalData(appData);
 }
 
@@ -431,18 +432,23 @@ export async function generateInvoices({ month, year }: { month: number, year: n
 
         for (const cls of studentClasses) {
             let classFee = 0;
-            const attendedSessions = appData.attendance.filter(a =>
-                a.studentId === student.id && a.classId === cls.id && a.date.startsWith(monthStr) &&
-                (a.status === AttendanceStatus.PRESENT || a.status === AttendanceStatus.LATE)
-            ).length;
+            const studentIsEnrolled = (cls.studentIds || []).includes(student.id);
 
-            if (attendedSessions > 0) {
+            if (studentIsEnrolled) {
                 if (cls.fee.type === FeeType.MONTHLY || cls.fee.type === FeeType.PER_COURSE) {
                     classFee = cls.fee.amount;
-                    details += `- Lớp ${cls.name}: ${classFee.toLocaleString('vi-VN')} ₫\n`;
+                    if (classFee > 0) {
+                        details += `- Lớp ${cls.name}: ${classFee.toLocaleString('vi-VN')} ₫\n`;
+                    }
                 } else if (cls.fee.type === FeeType.PER_SESSION) {
-                    classFee = attendedSessions * cls.fee.amount;
-                    details += `- Lớp ${cls.name}: ${attendedSessions} buổi x ${cls.fee.amount.toLocaleString('vi-VN')} ₫ = ${classFee.toLocaleString('vi-VN')} ₫\n`;
+                    const attendedSessions = appData.attendance.filter(a =>
+                        a.studentId === student.id && a.classId === cls.id && a.date.startsWith(monthStr) &&
+                        (a.status === AttendanceStatus.PRESENT || a.status === AttendanceStatus.LATE)
+                    ).length;
+                    if (attendedSessions > 0) {
+                        classFee = attendedSessions * cls.fee.amount;
+                        details += `- Lớp ${cls.name}: ${attendedSessions} buổi x ${cls.fee.amount.toLocaleString('vi-VN')} ₫ = ${classFee.toLocaleString('vi-VN')} ₫\n`;
+                    }
                 }
             }
             totalAmount += classFee;
@@ -637,6 +643,17 @@ export const deleteAttendanceByMonth = async ({ month, year }: { month: number, 
     const appData = await getLocalData();
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
     appData.attendance = appData.attendance.filter(a => !a.date.startsWith(monthStr));
+    await setLocalData(appData);
+}
+
+export async function clearAllTransactions(): Promise<void> {
+    const appData = await getLocalData();
+    appData.students = appData.students.map(student => ({
+        ...student,
+        balance: 0,
+    }));
+    appData.transactions = [];
+    appData.invoices = [];
     await setLocalData(appData);
 }
 
