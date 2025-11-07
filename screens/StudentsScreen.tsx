@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useDataContext';
 import { useToast } from '../hooks/useToast';
 import { useAuth } from '../hooks/useAuth';
@@ -215,6 +215,8 @@ export const StudentsScreen: React.FC = () => {
     const { state, addStudent, updateStudent, deleteStudent } = useData();
     const { role } = useAuth();
     const { toast } = useToast();
+    const location = useLocation();
+    const navigate = useNavigate();
     const [isModalOpen, setModalOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState<Student | undefined>(undefined);
     const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean; student: Student | null }>({ isOpen: false, student: null });
@@ -235,6 +237,21 @@ export const StudentsScreen: React.FC = () => {
         }
         setSortConfig({ key, direction });
     };
+
+    const handleOpenModal = (student?: Student) => {
+        setEditingStudent(student);
+        setModalOpen(true);
+    };
+
+    useEffect(() => {
+        const { editStudentId } = location.state || {};
+        if (editStudentId && !isModalOpen) {
+            const studentToEdit = state.students.find(s => s.id === editStudentId);
+            if (studentToEdit) {
+                handleOpenModal(studentToEdit);
+            }
+        }
+    }, [location.state, state.students, isModalOpen]);
 
     const filteredStudents = useMemo(() => {
         let studentsToFilter = state.students;
@@ -356,17 +373,17 @@ export const StudentsScreen: React.FC = () => {
         ), sortable: true, sortKey: 'status' as keyof Student },
     ];
 
-    const handleOpenModal = (student?: Student) => {
-        setEditingStudent(student);
-        setModalOpen(true);
-    };
-
     const handleCloseModal = () => {
         setEditingStudent(undefined);
         setModalOpen(false);
+        const { returnTo } = location.state || {};
+        if (returnTo) {
+            navigate(returnTo, { replace: true, state: {} });
+        }
     };
 
     const handleSubmit = async (payload: { student: Student; classIds: string[] }) => {
+        const { returnTo } = location.state || {};
         try {
             if (editingStudent) {
                 await updateStudent({ 
@@ -375,11 +392,16 @@ export const StudentsScreen: React.FC = () => {
                     classIds: payload.classIds 
                 });
                 toast.success(`Đã cập nhật thông tin học viên ${payload.student.name}`);
+                setModalOpen(false);
+                setEditingStudent(undefined);
+                if (returnTo) {
+                    navigate(`/student/${payload.student.id}`, { replace: true, state: {} });
+                }
             } else {
                 await addStudent(payload);
                 toast.success(`Đã thêm học viên mới ${payload.student.name}`);
+                handleCloseModal();
             }
-            handleCloseModal();
         } catch (error: any) {
             toast.error(error.message || 'Đã xảy ra lỗi. Vui lòng thử lại.');
         }

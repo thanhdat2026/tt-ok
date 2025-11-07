@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useDataContext';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
@@ -308,6 +308,8 @@ const ClassForm: React.FC<{
 export const ClassesScreen: React.FC = () => {
     const { state, addClass, updateClass, deleteClass } = useData();
     const { toast } = useToast();
+    const location = useLocation();
+    const navigate = useNavigate();
     const { students, teachers, classes } = state;
     const { user, role } = useAuth();
     const [isModalOpen, setModalOpen] = useState(false);
@@ -317,8 +319,22 @@ export const ClassesScreen: React.FC = () => {
 
     const canManage = role === UserRole.ADMIN || role === UserRole.MANAGER;
     const canDoAttendance = role === UserRole.ADMIN || role === UserRole.MANAGER || role === UserRole.TEACHER;
-    const todayDateString = new Date().toISOString().split('T')[0];
 
+    const handleOpenModal = (cls?: Class) => {
+        setEditingClass(cls);
+        setModalOpen(true);
+    };
+
+    useEffect(() => {
+        const { editClassId } = location.state || {};
+        if (editClassId && !isModalOpen) {
+            const classToEdit = state.classes.find(c => c.id === editClassId);
+            if (classToEdit) {
+                handleOpenModal(classToEdit);
+            }
+        }
+    }, [location.state, state.classes, isModalOpen]);
+    
     const getTeacherNames = (teacherIds: string[]) => {
         if (!teacherIds || teacherIds.length === 0) return 'N/A';
         return teacherIds.map(id => teachers.find(t => t.id === id)?.name || 'N/A').join(', ');
@@ -347,26 +363,31 @@ export const ClassesScreen: React.FC = () => {
         );
     }, [userClasses, searchQuery, teachers]);
     
-    const handleOpenModal = (cls?: Class) => {
-        setEditingClass(cls);
-        setModalOpen(true);
-    };
-    
     const handleCloseModal = () => {
         setEditingClass(undefined);
         setModalOpen(false);
+        const { returnTo } = location.state || {};
+        if (returnTo) {
+            navigate(returnTo, { replace: true, state: {} });
+        }
     };
 
     const handleSubmit = async (data: Class) => {
+        const { returnTo } = location.state || {};
         try {
             if (editingClass) {
                 await updateClass({ originalId: editingClass.id, updatedClass: data });
                 toast.success(`Đã cập nhật lớp học ${data.name}`);
+                setModalOpen(false);
+                setEditingClass(undefined);
+                if (returnTo) {
+                    navigate(`/class/${data.id}`, { replace: true, state: {} });
+                }
             } else {
                 await addClass(data);
                 toast.success(`Đã thêm lớp học mới ${data.name}`);
+                handleCloseModal();
             }
-            handleCloseModal();
         } catch (error: any) {
             toast.error(error.message || 'Đã xảy ra lỗi. Vui lòng thử lại.');
         }

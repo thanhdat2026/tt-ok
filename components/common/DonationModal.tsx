@@ -39,13 +39,13 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose })
             <div className="text-center">
                 <div className="flex justify-center items-center gap-2 mb-4">
                     <span className="text-pink-500">{React.cloneElement(ICONS.heart, {width: 28, height: 28})}</span>
-                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">Mời tác giả một ly coffe</h2>
+                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">Mời tác giả một ly cà phê</h2>
                 </div>
                 
                 <p className="text-gray-600 dark:text-gray-300 mb-6">
                     Cảm ơn thầy/cô đã sử dụng ứng dụng!
                     <br />
-                    Đây là một sản phẩm miễn phí được tạo ra với mong muốn hỗ trợ công việc của các giáo viên. Nếu thầy/cô thấy ứng dụng này hữu ích, hãy ủng hộ tác giả một ly coffe để có thêm động lực phát triển nhé!
+                    Đây là một sản phẩm miễn phí được tạo ra với mong muốn hỗ trợ công việc của các giáo viên. Nếu thầy/cô thấy ứng dụng này hữu ích, hãy ủng hộ tác giả một ly cà phê để có thêm động lực phát triển nhé!
                 </p>
 
                 <div className="flex justify-center mb-6">

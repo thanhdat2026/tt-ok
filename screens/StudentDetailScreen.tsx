@@ -7,7 +7,7 @@ import { Table, SortConfig } from '../components/common/Table';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
 import { ICONS, ROUTES } from '../constants';
-import { Transaction, ProgressReport, PersonStatus, TransactionType, Class, AttendanceStatus, UserRole } from '../types';
+import { Transaction, ProgressReport, PersonStatus, TransactionType, Class, AttendanceStatus, UserRole, AttendanceRecord } from '../types';
 import { CurrencyInput } from '../components/common/CurrencyInput';
 import { ListItemCard } from '../components/common/ListItemCard';
 import { ConfirmationModal } from '../components/common/ConfirmationModal';
@@ -168,7 +168,7 @@ const AttendanceSummaryWidget: React.FC<{ studentId: string, enrolledClasses: Cl
 
 export const StudentDetailScreen: React.FC = () => {
     const { id } = useParams<{ id: string }>();
-    const { state, addAdjustment, updateTransaction, deleteTransaction } = useData();
+    const { state, addAdjustment, updateTransaction, deleteTransaction, updateAttendance, deleteStudent } = useData();
     const { toast } = useToast();
     const { role } = useAuth();
     const navigate = useNavigate();
@@ -179,6 +179,7 @@ export const StudentDetailScreen: React.FC = () => {
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, item?: Transaction }>({ open: false });
     const [attendanceLogModal, setAttendanceLogModal] = useState<{ isOpen: boolean; classId: string | null; className: string | null }>({ isOpen: false, classId: null, className: null });
+    const [deleteStudentConfirmOpen, setDeleteStudentConfirmOpen] = useState(false);
 
 
     const canManage = role !== UserRole.VIEWER;
@@ -276,6 +277,28 @@ export const StudentDetailScreen: React.FC = () => {
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [attendance, student, attendanceLogModal.classId]);
 
+    const handleAttendanceChange = async (recordToUpdate: AttendanceRecord, newStatus: AttendanceStatus) => {
+        if (recordToUpdate.status === newStatus) return;
+    
+        const allRecordsForDay = attendance.filter(
+            a => a.classId === recordToUpdate.classId && a.date === recordToUpdate.date && a.studentId !== recordToUpdate.studentId
+        );
+    
+        const updatedRecord: AttendanceRecord = {
+            ...recordToUpdate,
+            status: newStatus,
+        };
+    
+        const newRecordsForDay = [...allRecordsForDay, updatedRecord];
+    
+        try {
+            await updateAttendance(newRecordsForDay);
+            toast.success(`Đã cập nhật điểm danh ngày ${recordToUpdate.date}.`);
+        } catch (error) {
+            toast.error('Lỗi khi cập nhật điểm danh.');
+        }
+    };
+
     const getStatusBadge = (status: AttendanceStatus) => {
         switch (status) {
             case AttendanceStatus.PRESENT:
@@ -333,6 +356,21 @@ export const StudentDetailScreen: React.FC = () => {
         }
     };
 
+    const handleEdit = () => {
+        navigate(ROUTES.STUDENTS, { state: { editStudentId: student.id, returnTo: `/student/${student.id}` } });
+    };
+
+    const handleDelete = async () => {
+        try {
+            await deleteStudent(student.id);
+            toast.success(`Đã xoá học viên ${student.name}`);
+            navigate(ROUTES.STUDENTS, { replace: true });
+        } catch (error) {
+            toast.error('Lỗi khi xoá học viên.');
+        }
+        setDeleteStudentConfirmOpen(false);
+    };
+
     const isEditable = (type: TransactionType) => type !== TransactionType.INVOICE;
 
     const transactionColumns = [
@@ -374,13 +412,19 @@ export const StudentDetailScreen: React.FC = () => {
         <>
             <div className="space-y-6">
                  <div className="card-base">
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-4">
                          <div>
                             <h1 className="text-3xl font-bold">{student.name}</h1>
                             <span className={`mt-1 px-2 inline-flex text-sm leading-5 font-semibold rounded-full ${student.status === PersonStatus.ACTIVE ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                 {student.status === PersonStatus.ACTIVE ? 'Đang hoạt động' : 'Tạm nghỉ'}
                             </span>
                         </div>
+                        {canManage && (
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <Button variant="secondary" onClick={handleEdit}>{ICONS.edit} Sửa</Button>
+                                <Button variant="danger" onClick={() => setDeleteStudentConfirmOpen(true)}>{ICONS.delete} Xóa</Button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -537,21 +581,20 @@ export const StudentDetailScreen: React.FC = () => {
                     {attendanceLogForModal.length > 0 ? (
                         attendanceLogForModal.map(record => (
                             <div key={record.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-md">
-                                <div className="flex items-center gap-3">
-                                    <p className="font-semibold">{record.date}</p>
-                                    {getStatusBadge(record.status)}
-                                </div>
-                                {canManage && (
-                                    <Button 
-                                        variant="secondary" 
-                                        size="sm"
-                                        onClick={() => {
-                                            navigate(ROUTES.ATTENDANCE_DETAIL.replace(':classId', record.classId).replace(':date', record.date));
-                                            setAttendanceLogModal({ isOpen: false, classId: null, className: null });
-                                        }}
+                                <p className="font-semibold">{record.date}</p>
+                                {canManage ? (
+                                    <select
+                                        value={record.status}
+                                        onChange={(e) => handleAttendanceChange(record, e.target.value as AttendanceStatus)}
+                                        className="form-select py-1 px-2 text-sm w-32"
+                                        onClick={(e) => e.stopPropagation()}
                                     >
-                                        Sửa
-                                    </Button>
+                                        <option value={AttendanceStatus.PRESENT}>Có mặt</option>
+                                        <option value={AttendanceStatus.ABSENT}>Vắng</option>
+                                        <option value={AttendanceStatus.LATE}>Trễ</option>
+                                    </select>
+                                ) : (
+                                    getStatusBadge(record.status)
                                 )}
                             </div>
                         ))
@@ -560,6 +603,19 @@ export const StudentDetailScreen: React.FC = () => {
                     )}
                 </div>
             </Modal>
+             <ConfirmationModal
+                isOpen={deleteStudentConfirmOpen}
+                onClose={() => setDeleteStudentConfirmOpen(false)}
+                onConfirm={handleDelete}
+                title="Xác nhận Xóa Học viên"
+                message={
+                    <p>
+                        Bạn có chắc chắn muốn xoá học viên <strong>{student?.name}</strong>?
+                        <br /><br />
+                        <span className="font-bold text-red-500">CẢNH BÁO:</span> Toàn bộ dữ liệu học phí, điểm danh và báo cáo của học viên này cũng sẽ bị XOÁ VĨNH VIỄN.
+                    </p>
+                }
+            />
         </>
     );
 };

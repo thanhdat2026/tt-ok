@@ -30,6 +30,7 @@ interface DataContextType {
     state: AppState;
     error: string | null;
     isInitialOffline: boolean;
+    isInitialLoad: boolean;
     refreshData: () => Promise<void>;
     addStudent: (payload: { student: Student, classIds: string[] }) => Promise<void>;
     updateStudent: (payload: { originalId: string, updatedStudent: Student, classIds: string[] }) => Promise<void>;
@@ -79,31 +80,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [state, setState] = useState<AppState>(initialState);
   const [error, setError] = useState<string | null>(null);
   const [isInitialOffline, setIsInitialOffline] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const refreshData = useCallback(async () => {
+    // This function is for subsequent refreshes.
     setState(prev => ({ ...prev, loading: true }));
     setError(null);
-    setIsInitialOffline(false);
     try {
         const data = await api.loadInitialData();
         setState({ ...data, loading: false });
     } catch (err: any) {
         console.error("Không thể tải dữ liệu:", err);
-        // Check for specific permission error from api.ts
         if (err.message && err.message.startsWith('PERMISSION_ERROR:')) {
             setError(err.message.replace('PERMISSION_ERROR: ', ''));
         } else {
-            // This now represents any local data loading failure (FSA or localStorage)
-            setIsInitialOffline(true);
-            setError(`Không thể tải dữ liệu cục bộ. Lỗi: ${err.message || 'Không rõ'}. Thử phục hồi từ bản sao lưu trong Cài đặt hoặc chọn lại tệp dữ liệu.`);
+            setError(`Không thể tải dữ liệu cục bộ. Lỗi: ${err.message || 'Không rõ'}.`);
         }
         setState(prev => ({ ...prev, loading: false }));
     }
   }, []);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    // This effect runs only once for the initial data load.
+    const initialLoad = async () => {
+        setError(null);
+        setIsInitialOffline(false);
+        try {
+            const data = await api.loadInitialData();
+            setState({ ...data, loading: false });
+        } catch (err: any) {
+            console.error("Không thể tải dữ liệu:", err);
+            if (err.message && err.message.startsWith('PERMISSION_ERROR:')) {
+                setError(err.message.replace('PERMISSION_ERROR: ', ''));
+            } else {
+                setIsInitialOffline(true);
+                setError(`Không thể tải dữ liệu cục bộ. Lỗi: ${err.message || 'Không rõ'}. Thử phục hồi từ bản sao lưu trong Cài đặt hoặc chọn lại tệp dữ liệu.`);
+            }
+            setState(prev => ({ ...prev, loading: false }));
+        } finally {
+            setIsInitialLoad(false);
+        }
+    };
+    initialLoad();
+  }, []); // Empty dependency array ensures it runs only once.
 
   // Helper for functions that are complex and should trigger a full data refresh
   const createRefreshingFunc = <T,>(apiFunc: (payload: T) => Promise<any>) => async (payload: T) => {
@@ -115,6 +134,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     state,
     error,
     isInitialOffline,
+    isInitialLoad,
     refreshData,
     addStudent: async (payload) => {
         await api.addStudent(payload);

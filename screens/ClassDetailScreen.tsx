@@ -6,9 +6,10 @@ import { useToast } from '../hooks/useToast';
 import { Table, SortConfig } from '../components/common/Table';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
-import { Student, ProgressReport, AttendanceRecord, PersonStatus, UserRole, AttendanceStatus, Announcement } from '../types';
+import { Student, ProgressReport, AttendanceRecord, PersonStatus, UserRole, AttendanceStatus, Announcement, Class } from '../types';
 import { ICONS, ROUTES } from '../constants';
 import { ListItemCard } from '../components/common/ListItemCard';
+import { ConfirmationModal } from '../components/common/ConfirmationModal';
 
 
 const ProgressReportForm: React.FC<{
@@ -132,7 +133,7 @@ const AttendanceTab: React.FC<{ cls: any, attendance: AttendanceRecord[] }> = ({
                         onChange={e => setSelectedDate(e.target.value)}
                         className="form-input flex-grow"
                     />
-                    <Button onClick={() => navigate(ROUTES.ATTENDANCE_DETAIL.replace(':classId', cls.id).replace(':date', selectedDate))} className="flex-shrink-0">
+                    <Button onClick={() => navigate(ROUTES.ATTENDANCE_DETAIL.replace(':classId', cls.id).replace(':date', selectedDate), { state: { returnTo: `/class/${cls.id}`, defaultTab: 'attendance' } })} className="flex-shrink-0">
                         Điểm danh
                     </Button>
                 </div>
@@ -173,7 +174,7 @@ const AttendanceTab: React.FC<{ cls: any, attendance: AttendanceRecord[] }> = ({
                                                             Vắng: <span className="text-red-600 font-semibold">{summary.absent}</span>
                                                         </p>
                                                     </div>
-                                                    <Link to={ROUTES.ATTENDANCE_DETAIL.replace(':classId', cls.id).replace(':date', date)}>
+                                                    <Link to={ROUTES.ATTENDANCE_DETAIL.replace(':classId', cls.id).replace(':date', date)} state={{ returnTo: `/class/${cls.id}`, defaultTab: 'attendance' }}>
                                                         <Button variant="secondary" size="sm">Xem / Sửa</Button>
                                                     </Link>
                                                 </div>
@@ -310,12 +311,16 @@ const AnnouncementsTab: React.FC<{
 export const ClassDetailScreen: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const location = useLocation();
-    const { state, addProgressReport } = useData();
+    const navigate = useNavigate();
+    const { state, addProgressReport, deleteClass } = useData();
     const { user, role } = useAuth();
     const { toast } = useToast();
     const { classes, students, teachers, progressReports, attendance } = state;
     const [isReportModalOpen, setReportModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<ClassDetailTab>('students');
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+    const canManage = role === UserRole.ADMIN || role === UserRole.MANAGER;
 
     useEffect(() => {
         if (location.state?.defaultTab) {
@@ -434,6 +439,21 @@ export const ClassDetailScreen: React.FC = () => {
         }
     };
 
+    const handleEdit = () => {
+        navigate(ROUTES.CLASSES, { state: { editClassId: cls.id, returnTo: `/class/${cls.id}` } });
+    };
+
+    const handleDelete = async () => {
+        try {
+            await deleteClass(cls.id);
+            toast.success(`Đã xoá lớp học ${cls.name}`);
+            navigate(ROUTES.CLASSES, { replace: true });
+        } catch (error) {
+            toast.error('Lỗi khi xoá lớp học.');
+        }
+        setDeleteConfirmOpen(false);
+    };
+
     const dayMap: Record<string, string> = {
         'Monday': 'Thứ Hai', 'Tuesday': 'Thứ Ba', 'Wednesday': 'Thứ Tư', 'Thursday': 'Thứ Năm',
         'Friday': 'Thứ Sáu', 'Saturday': 'Thứ Bảy', 'Sunday': 'Chủ Nhật'
@@ -451,16 +471,26 @@ export const ClassDetailScreen: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="card-base">
-                <h1 className="text-3xl font-bold">{cls.name}</h1>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-sm">
-                    <span className="bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full font-mono font-semibold">ID: {cls.id}</span>
-                    <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-3 py-1 rounded-full font-semibold">Môn: {cls.subject}</span>
-                    <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 px-3 py-1 rounded-full font-semibold">GV: {teacherNames}</span>
-                </div>
-                 <div className="mt-4 text-sm text-gray-600 dark:text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
-                    {(cls.schedule || []).map((s, i) => (
-                        <div key={i} className="font-semibold">{`${dayMap[s.dayOfWeek]}: ${s.startTime} - ${s.endTime}`}</div>
-                    ))}
+                <div className="flex justify-between items-start gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold">{cls.name}</h1>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-sm">
+                            <span className="bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full font-mono font-semibold">ID: {cls.id}</span>
+                            <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-3 py-1 rounded-full font-semibold">Môn: {cls.subject}</span>
+                            <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 px-3 py-1 rounded-full font-semibold">GV: {teacherNames}</span>
+                        </div>
+                        <div className="mt-4 text-sm text-gray-600 dark:text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
+                            {(cls.schedule || []).map((s, i) => (
+                                <div key={i} className="font-semibold">{`${dayMap[s.dayOfWeek]}: ${s.startTime} - ${s.endTime}`}</div>
+                            ))}
+                        </div>
+                    </div>
+                    {canManage && (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button variant="secondary" onClick={handleEdit}>{ICONS.edit} Sửa</Button>
+                            <Button variant="danger" onClick={() => setDeleteConfirmOpen(true)}>{ICONS.delete} Xóa</Button>
+                        </div>
+                    )}
                 </div>
             </div>
             
@@ -560,6 +590,19 @@ export const ClassDetailScreen: React.FC = () => {
                     onCancel={() => setReportModalOpen(false)}
                 />
             </Modal>
+            <ConfirmationModal
+                isOpen={deleteConfirmOpen}
+                onClose={() => setDeleteConfirmOpen(false)}
+                onConfirm={handleDelete}
+                title="Xác nhận Xóa Lớp học"
+                message={
+                     <p>
+                        Bạn có chắc chắn muốn xóa lớp học <strong>{cls?.name}</strong>?
+                        <br/><br/>
+                        <span className="font-bold text-red-500">CẢNH BÁO:</span> Mọi dữ liệu điểm danh và báo cáo tiến độ của lớp này cũng sẽ bị xóa.
+                    </p>
+                }
+            />
         </div>
     );
 };

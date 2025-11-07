@@ -101,7 +101,7 @@ export function Table<T extends { id: string }>({ columns, data, actions, sortCo
                 </th>
               );
             })}
-            {actions && <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>}
+            {actions && <th scope="col" className="relative px-6 py-3"><span className="sr-only">Hành động</span></th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">

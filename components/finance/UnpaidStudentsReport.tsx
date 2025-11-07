@@ -9,6 +9,7 @@ import { ICONS } from '../../constants';
 import { ListItemCard } from '../common/ListItemCard';
 import { BulkDebtPrintModal } from './BulkDebtPrintModal';
 import { PaymentModal } from './PaymentModal';
+import { ClassDebtReportModal } from './ClassDebtReportModal';
 
 export const UnpaidStudentsReport: React.FC = () => {
     const { state } = useData();
@@ -17,6 +18,7 @@ export const UnpaidStudentsReport: React.FC = () => {
     const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
     const [sortConfig, setSortConfig] = useState<SortConfig<Student & { classNames: string }> | null>({ key: 'balance', direction: 'ascending' });
     const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+    const [isClassReportModalOpen, setIsClassReportModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [classFilter, setClassFilter] = useState('all');
     const [paymentModalState, setPaymentModalState] = useState<{ isOpen: boolean; student: Student | null }>({ isOpen: false, student: null });
@@ -63,6 +65,20 @@ export const UnpaidStudentsReport: React.FC = () => {
                 classNames: classes.filter(c => (c.studentIds || []).includes(s.id)).map(c => c.name).join(', ')
             }));
     }, [students, classes, classFilter, searchQuery]);
+    
+    const allStudentsInSelectedClass = useMemo(() => {
+        if (classFilter === 'all') {
+            return [];
+        }
+        const selectedClass = classes.find(c => c.id === classFilter);
+        if (!selectedClass) {
+            return [];
+        }
+        const studentIdsInClass = new Set(selectedClass.studentIds);
+        const studentsInClass = students.filter(s => studentIdsInClass.has(s.id));
+        // Sort students alphabetically by name for the report
+        return studentsInClass.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    }, [students, classes, classFilter]);
     
     const sortedUnpaidStudents = useMemo(() => {
         let sortableItems = [...unpaidStudents];
@@ -136,12 +152,19 @@ export const UnpaidStudentsReport: React.FC = () => {
             <div className="card-base">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                     <h2 className="text-xl font-semibold">Báo cáo Công nợ Học phí</h2>
-                    <div className="flex items-center gap-2 w-full md:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                         <Button 
                             onClick={() => setIsPrintModalOpen(true)} 
                             disabled={selectedStudentIds.length === 0}
                         >
                             {ICONS.download} Xuất Thông báo ({selectedStudentIds.length})
+                        </Button>
+                        <Button 
+                            onClick={() => setIsClassReportModalOpen(true)} 
+                            disabled={classFilter === 'all' || allStudentsInSelectedClass.length === 0}
+                            variant="secondary"
+                        >
+                            {ICONS.download} In Báo Cáo Lớp
                         </Button>
                         <Button onClick={handleExport} variant="secondary">{ICONS.export} Xuất CSV</Button>
                     </div>
@@ -178,6 +201,7 @@ export const UnpaidStudentsReport: React.FC = () => {
                         onSort={handleSort} 
                         selectedIds={selectedStudentIds}
                         onSelectionChange={setSelectedStudentIds}
+                        fullDataIds={sortedUnpaidStudents.map(s => s.id)}
                     />
                 </div>
                 <div className="md:hidden space-y-4">
@@ -242,6 +266,12 @@ export const UnpaidStudentsReport: React.FC = () => {
                 isOpen={paymentModalState.isOpen}
                 onClose={() => setPaymentModalState({ isOpen: false, student: null })}
                 student={paymentModalState.student}
+            />
+            <ClassDebtReportModal 
+                isOpen={isClassReportModalOpen}
+                onClose={() => setIsClassReportModalOpen(false)}
+                students={allStudentsInSelectedClass}
+                className={classes.find(c => c.id === classFilter)?.name || ''}
             />
         </>
     )

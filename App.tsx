@@ -139,7 +139,7 @@ const OfflineScreen: React.FC = () => (
 
 const AppRoutes: React.FC = () => {
     const { isAuthenticated, role, isAuthLoading } = useAuth();
-    const { state, isInitialOffline } = useData();
+    const { state, isInitialOffline, isInitialLoad } = useData();
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -153,7 +153,7 @@ const AppRoutes: React.FC = () => {
         }
     }, [state.settings.name]);
     
-    if (state.loading || isAuthLoading) {
+    if ((state.loading && isInitialLoad) || isAuthLoading) {
          return (
             <div className="flex h-screen w-screen items-center justify-center">
                 {ICONS.loading}

@@ -1,13 +1,32 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../hooks/useDataContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import { SearchResult } from '../../types';
 import { ICONS } from '../../constants';
+
+const HighlightMatch: React.FC<{ text: string; query: string }> = ({ text, query }) => {
+    if (!query || !text) return <>{text}</>;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+        <span>
+            {parts.map((part, i) =>
+                part.toLowerCase() === query.toLowerCase() ? (
+                    <span key={i} className="font-bold text-primary">{part}</span>
+                ) : (
+                    part
+                )
+            )}
+        </span>
+    );
+};
 
 export const GlobalSearch: React.FC = () => {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(-1);
+    const debouncedQuery = useDebounce(query, 300);
     const { state } = useData();
     const navigate = useNavigate();
     const searchRef = useRef<HTMLDivElement>(null);
@@ -17,6 +36,13 @@ export const GlobalSearch: React.FC = () => {
         teacher: ICONS.teachers,
         class: ICONS.classes,
     };
+
+    const handleResultClick = React.useCallback((path: string) => {
+        setQuery('');
+        setResults([]);
+        setIsOpen(false);
+        navigate(path);
+    }, [navigate]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -30,13 +56,13 @@ export const GlobalSearch: React.FC = () => {
         };
     }, []);
 
-    useMemo(() => {
-        if (query.length < 2) {
+    useEffect(() => {
+        if (debouncedQuery.length < 2) {
             setResults([]);
             return;
         }
 
-        const lowerQuery = query.toLowerCase();
+        const lowerQuery = debouncedQuery.toLowerCase();
         const foundResults: SearchResult[] = [];
 
         // Search Students
@@ -65,14 +91,38 @@ export const GlobalSearch: React.FC = () => {
         });
 
         setResults(foundResults.slice(0, 10)); // Limit results
-    }, [query, state.students, state.teachers, state.classes]);
+        setActiveIndex(-1);
+    }, [debouncedQuery, state.students, state.teachers, state.classes]);
+    
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isOpen || results.length === 0) return;
 
-    const handleResultClick = (path: string) => {
-        setQuery('');
-        setResults([]);
-        setIsOpen(false);
-        navigate(path);
-    };
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    setActiveIndex(prev => (prev < results.length - 1 ? prev + 1 : prev));
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    setActiveIndex(prev => (prev > 0 ? prev - 1 : 0));
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (activeIndex >= 0 && activeIndex < results.length) {
+                        handleResultClick(results[activeIndex].path);
+                    }
+                    break;
+                case 'Escape':
+                    setIsOpen(false);
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, results, activeIndex, handleResultClick]);
+
 
     return (
         <div className="relative w-full max-w-xs" ref={searchRef}>
@@ -94,17 +144,15 @@ export const GlobalSearch: React.FC = () => {
                 <div className="absolute z-10 w-full mt-2 bg-white rounded-md shadow-lg dark:bg-gray-800 border dark:border-gray-700 max-h-96 overflow-y-auto">
                     {results.length > 0 ? (
                         <ul>
-                            {results.map(result => (
+                            {results.map((result, index) => (
                                 <li key={`${result.type}-${result.id}`}
                                     onClick={() => handleResultClick(result.path)}
-                                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-b-0">
-                                    <div className="flex items-center gap-3 px-4 py-3">
-                                        <span className="text-gray-400">{React.cloneElement(typeIcons[result.type], { width: 20, height: 20 })}</span>
-                                        <div>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{result.name}</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">{result.context}</p>
-                                        </div>
-                                    </div>
+                                    onMouseEnter={() => setActiveIndex(index)}
+                                    className={`px-4 py-3 cursor-pointer border-b dark:border-gray-700 last:border-b-0
+                                        ${index === activeIndex ? 'bg-gray-100 dark:bg-gray-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`
+                                    }>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-200"><HighlightMatch text={result.name} query={query} /></p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">{result.context}</p>
                                 </li>
                             ))}
                         </ul>

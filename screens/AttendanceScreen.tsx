@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../hooks/useDataContext';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
@@ -11,6 +11,7 @@ import { ConfirmationModal } from '../components/common/ConfirmationModal';
 export const AttendanceScreen: React.FC = () => {
     const { classId, date } = useParams<{ classId: string; date: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { state, updateAttendance, deleteAttendanceForDate } = useData();
     const { toast } = useToast();
     const { role } = useAuth();
@@ -20,6 +21,8 @@ export const AttendanceScreen: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [confirmDeleteModalOpen, setConfirmDeleteModalOpen] = useState(false);
+    const [unmarkedConfirmModalOpen, setUnmarkedConfirmModalOpen] = useState(false);
+
 
     const isViewer = role === UserRole.VIEWER;
     const canTakeAttendance = !isViewer;
@@ -82,7 +85,7 @@ export const AttendanceScreen: React.FC = () => {
         const initialData = new Map<string, AttendanceStatus>();
         classStudents.forEach(student => {
             const record = attendance.find(a => a.classId === classId && a.studentId === student.id && a.date === date);
-            initialData.set(student.id, record ? record.status : AttendanceStatus.PRESENT);
+            initialData.set(student.id, record ? record.status : AttendanceStatus.UNMARKED);
         });
         setAttendanceData(initialData);
     }, [classId, date, attendance, classStudents]);
@@ -100,9 +103,16 @@ export const AttendanceScreen: React.FC = () => {
         });
         setAttendanceData(newMap);
     };
-    
-    const handleSubmit = async () => {
-        if (!canTakeAttendance) return;
+
+    const handleNavigateBack = () => {
+        const returnTo = location.state?.returnTo || `/class/${classId}`;
+        const returnState = location.state?.defaultTab ? { state: { defaultTab: location.state.defaultTab } } : {};
+        navigate(returnTo, returnState);
+    };
+
+    const proceedWithSave = useCallback(async () => {
+        if (!canTakeAttendance || !classId || !date) return;
+
         setIsLoading(true);
         const newRecords: AttendanceRecord[] = [];
         for (const [studentId, status] of attendanceData.entries()) {
@@ -120,13 +130,25 @@ export const AttendanceScreen: React.FC = () => {
         try {
             await updateAttendance(newRecords);
             toast.success('Đã lưu điểm danh thành công!');
-            navigate(`/class/${classId}`);
+            handleNavigateBack();
         } catch (error) {
             toast.error('Lỗi khi lưu điểm danh. Vui lòng thử lại.');
         } finally {
             setIsLoading(false);
+            setUnmarkedConfirmModalOpen(false);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [attendanceData, classId, date, canTakeAttendance, updateAttendance, toast, navigate, location.state]);
+    
+    const handleSubmit = () => {
+        const unmarkedCount = Array.from(attendanceData.values()).filter(status => status === AttendanceStatus.UNMARKED).length;
+        if (unmarkedCount > 0) {
+            setUnmarkedConfirmModalOpen(true);
+        } else {
+            proceedWithSave();
         }
     };
+
 
     const handleDelete = async () => {
         if (!classId || !date || !canTakeAttendance) return;
@@ -134,7 +156,7 @@ export const AttendanceScreen: React.FC = () => {
         try {
             await deleteAttendanceForDate({ classId, date });
             toast.success(`Đã xóa điểm danh ngày ${date} cho lớp ${cls?.name}.`);
-            navigate(`/class/${classId}`);
+            handleNavigateBack();
         } catch (error) {
             toast.error('Lỗi khi xóa điểm danh.');
         } finally {
@@ -161,8 +183,8 @@ export const AttendanceScreen: React.FC = () => {
             <div className="flex flex-col h-full">
                 <div className="flex-1 overflow-y-auto p-4 md:p-6">
                     <div className="mb-6">
-                         <Button variant="secondary" onClick={() => navigate(`/class/${classId}`)} className="mb-4">
-                            {ICONS.chevronLeft} Quay lại lớp học
+                         <Button variant="secondary" onClick={handleNavigateBack} className="mb-4">
+                            {ICONS.chevronLeft} Quay lại
                         </Button>
                         <h1 className="text-2xl md:text-3xl font-bold">Điểm danh lớp {cls.name}</h1>
                         <p className="text-gray-600 dark:text-gray-300">Ngày: {date}</p>
@@ -170,9 +192,10 @@ export const AttendanceScreen: React.FC = () => {
                     
                     {classStudents.length > 0 && canTakeAttendance && (
                         <div className="mb-4 p-3 bg-blue-50 dark:bg-gray-700 rounded-lg text-blue-800 dark:text-blue-200 text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                           <p>Mặc định tất cả học viên đều "Có mặt". Chỉ cần đánh dấu các trường hợp vắng hoặc trễ.</p>
+                           <p>Vui lòng điểm danh cho tất cả học viên. Sử dụng các nút thao tác nhanh bên dưới để điểm danh hàng loạt.</p>
                            <div className="flex gap-2 flex-shrink-0">
                                 <Button variant="secondary" onClick={() => handleBulkChange(AttendanceStatus.PRESENT)} disabled={!canTakeAttendance}>Tất cả có mặt</Button>
+                                <Button onClick={() => handleBulkChange(AttendanceStatus.LATE)} disabled={!canTakeAttendance} className="bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400 text-white">Tất cả đi muộn</Button>
                                 <Button variant="danger" onClick={() => handleBulkChange(AttendanceStatus.ABSENT)} disabled={!canTakeAttendance}>Tất cả vắng</Button>
                            </div>
                         </div>
@@ -184,6 +207,11 @@ export const AttendanceScreen: React.FC = () => {
                                 <div key={student.id} className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <span className="font-semibold">{student.name}</span>
+                                        {attendanceData.get(student.id) === AttendanceStatus.UNMARKED && (
+                                            <span className="text-xs font-bold bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200 px-2 py-0.5 rounded-full">
+                                                Chưa điểm danh
+                                            </span>
+                                        )}
                                         <span className="text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 px-2 py-0.5 rounded-full">
                                             Buổi {attendanceCounts.get(student.id) || 0}
                                         </span>
@@ -243,6 +271,15 @@ export const AttendanceScreen: React.FC = () => {
                 onConfirm={handleDelete}
                 title="Xác nhận Xóa Điểm danh"
                 message={`Bạn có chắc chắn muốn xóa toàn bộ dữ liệu điểm danh cho lớp ${cls?.name} vào ngày ${date}? Hành động này không thể hoàn tác.`}
+            />
+             <ConfirmationModal
+                isOpen={unmarkedConfirmModalOpen}
+                onClose={() => setUnmarkedConfirmModalOpen(false)}
+                onConfirm={proceedWithSave}
+                title="Xác nhận Lưu Điểm danh"
+                message="Có học viên chưa được điểm danh. Nếu tiếp tục, những học viên này sẽ không có bản ghi điểm danh cho ngày hôm nay. Bạn có chắc chắn muốn lưu?"
+                confirmButtonText="Vẫn lưu"
+                confirmButtonVariant="primary"
             />
         </>
     );

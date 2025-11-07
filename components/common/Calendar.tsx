@@ -7,6 +7,7 @@ interface CalendarEvent {
     title: string;
     link: string;
     color: string;
+    linkState?: object;
 }
 
 interface CalendarProps {
@@ -82,7 +83,7 @@ export const Calendar: React.FC<CalendarProps> = ({ events }) => {
                         </div>
                         <div className="mt-1 space-y-1 overflow-y-auto max-h-14 md:max-h-20">
                             {dayEvents.map((event, index) => (
-                                <Link to={event.link} key={index} title={event.title} className="block text-xs p-0.5 md:p-1 rounded text-white truncate" style={{backgroundColor: event.color}}>
+                                <Link to={event.link} state={event.linkState} key={index} title={event.title} className="block text-xs p-0.5 md:p-1 rounded text-white truncate" style={{backgroundColor: event.color}}>
                                     {event.title}
                                 </Link>
                             ))}

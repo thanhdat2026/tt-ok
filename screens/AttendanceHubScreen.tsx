@@ -25,6 +25,7 @@ interface CalendarEvent {
     title: string;
     link: string;
     color: string;
+    linkState?: object;
 }
 
 export const AttendanceHubScreen: React.FC = () => {
@@ -82,6 +83,7 @@ export const AttendanceHubScreen: React.FC = () => {
                         title: cls.name,
                         link: ROUTES.ATTENDANCE_DETAIL.replace(':classId', cls.id).replace(':date', dateString),
                         color: color,
+                        linkState: { returnTo: ROUTES.ATTENDANCE_HUB }
                     });
                 }
             });

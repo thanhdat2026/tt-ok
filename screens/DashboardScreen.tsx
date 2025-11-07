@@ -61,7 +61,7 @@ const TodaysScheduleWidget: React.FC<{ classes: Class[], teachers: Teacher[] }> 
                                     {session.singleSchedule.startTime} - {session.singleSchedule.endTime} • GV: {getTeacherNames(session.teacherIds)}
                                 </p>
                             </div>
-                            <Link to={ROUTES.ATTENDANCE_DETAIL.replace(':classId', session.id).replace(':date', todayDateString)} className="w-full sm:w-auto">
+                            <Link to={ROUTES.ATTENDANCE_DETAIL.replace(':classId', session.id).replace(':date', todayDateString)} state={{ returnTo: ROUTES.DASHBOARD }} className="w-full sm:w-auto">
                                 <Button variant="secondary" className="w-full">Điểm danh</Button>
                             </Link>
                         </div>

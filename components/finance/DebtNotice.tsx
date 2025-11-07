@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Student, Transaction, CenterSettings, TransactionType } from '../../types';
+import { Student, Transaction, CenterSettings } from '../../types';
 
 interface DebtNoticeProps {
     student: Student;
@@ -58,7 +58,7 @@ export const DebtNotice: React.FC<DebtNoticeProps> = ({ student, transactions, s
                 <p className="text-gray-600 text-[10px]">Ngày lập: {new Date().toLocaleDateString('vi-VN')}</p>
             </div>
 
-            <section className="bg-gray-50 p-1.5 rounded border border-gray-200 mb-2 text-sm">
+            <section className="bg-gray-50 p-1.5 rounded border border-gray-200 mb-2 text-xs">
                 <p><span className="font-bold">Học viên:</span> {student.name}</p>
             </section>
 
@@ -86,8 +86,8 @@ export const DebtNotice: React.FC<DebtNoticeProps> = ({ student, transactions, s
             </div>
             
             <div className="w-full border-t-2 border-b-2 p-2 flex justify-between items-center mt-2" style={{ borderColor: settings.themeColor, backgroundColor: `${settings.themeColor}10` }}>
-                <span className="text-xs font-bold uppercase" style={{ color: settings.themeColor }}>Tổng Cộng Cần Thanh Toán</span>
-                <span className="text-base font-bold" style={{ color: settings.themeColor }}>{formatCurrency(totalDue)}</span>
+                <span className="text-xs font-bold uppercase" style={{ color: settings.themeColor }}>Tổng Thanh Toán</span>
+                <span className="text-xl font-bold" style={{ color: settings.themeColor }}>{formatCurrency(totalDue)}</span>
             </div>
 
             <section className="pt-1 mt-1 text-[9px] flex justify-between items-start gap-2">
@@ -95,15 +95,15 @@ export const DebtNotice: React.FC<DebtNoticeProps> = ({ student, transactions, s
                     <p className="font-bold">Thông tin thanh toán:</p>
                     <p>{settings.bankName} - {settings.bankAccountNumber}</p>
                     <p>{settings.bankAccountHolder}</p>
-                    <div className="mt-1 px-2 py-1 bg-yellow-100 border border-yellow-300 rounded">
-                        <span className="font-bold">Nội dung CK: </span>
-                        <span className="text-red-600 font-mono text-[10px]">{`${normalizeInfoName(student.name)}ThanhToanHP`}</span>
+                     <div className="mt-2 p-2 bg-yellow-100 border-l-4 border-yellow-400">
+                        <p className="text-xs font-bold uppercase text-yellow-800">Nội dung CK (Bắt buộc)</p>
+                        <p className="text-base text-red-600 font-mono font-bold break-all">{`${normalizeInfoName(student.name)}ThanhToanHP`}</p>
                     </div>
                 </div>
                 {qrCodeUrl && (
                     <div className="text-center flex-shrink-0">
-                        <img src={qrCodeUrl} alt="QR Code" className="w-20 h-20" />
-                        <p className="text-[8px] font-semibold">Quét mã</p>
+                        <img src={qrCodeUrl} alt="QR Code" className="w-24 h-24" />
+                        <p className="text-[9px] font-semibold">Quét mã để thanh toán</p>
                     </div>
                 )}
             </section>
