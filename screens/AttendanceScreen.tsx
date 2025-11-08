@@ -60,18 +60,15 @@ export const AttendanceScreen: React.FC = () => {
     const attendanceCounts = useMemo(() => {
         if (!classId || !date) return new Map<string, number>();
     
-        // Lấy chuỗi năm-tháng từ ngày được chọn (ví dụ: "2025-11-03" -> "2025-11")
         const monthStr = date.substring(0, 7);
     
         const counts = new Map<string, number>();
-        // Lọc tất cả các bản ghi điểm danh cho lớp cụ thể
         const classAttendanceRecords = attendance.filter(a => a.classId === classId);
     
         classStudents.forEach(student => {
-            // Lọc điểm danh cho học sinh hiện tại trong tháng đã chọn
             const studentMonthlyAttendance = classAttendanceRecords.filter(a =>
                 a.studentId === student.id &&
-                a.date.startsWith(monthStr) && // Kiểm tra xem bản ghi có trong cùng tháng không
+                a.date.startsWith(monthStr) &&
                 (a.status === AttendanceStatus.PRESENT || a.status === AttendanceStatus.LATE)
             );
             counts.set(student.id, studentMonthlyAttendance.length);
@@ -172,9 +169,10 @@ export const AttendanceScreen: React.FC = () => {
             onClick={onClick}
             title={label}
             disabled={!canTakeAttendance}
-            className={`p-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-1 font-semibold text-xs ${current === target ? `${color} text-white shadow-md` : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
+            className={`px-3 py-2 rounded-md transition-all duration-200 flex items-center justify-center gap-1.5 font-semibold text-sm flex-1 ${current === target ? `${color} text-white shadow-md` : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-            {icon}
+            {React.cloneElement(icon as React.ReactElement, {width: 18, height: 18})}
+            <span className="hidden sm:inline">{label}</span>
         </button>
     );
 
@@ -191,35 +189,37 @@ export const AttendanceScreen: React.FC = () => {
                     </div>
                     
                     {classStudents.length > 0 && canTakeAttendance && (
-                        <div className="mb-4 p-3 bg-blue-50 dark:bg-gray-700 rounded-lg text-blue-800 dark:text-blue-200 text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                           <p>Vui lòng điểm danh cho tất cả học viên. Sử dụng các nút thao tác nhanh bên dưới để điểm danh hàng loạt.</p>
-                           <div className="flex gap-2 flex-shrink-0">
-                                <Button variant="secondary" onClick={() => handleBulkChange(AttendanceStatus.PRESENT)} disabled={!canTakeAttendance}>Tất cả có mặt</Button>
-                                <Button onClick={() => handleBulkChange(AttendanceStatus.LATE)} disabled={!canTakeAttendance} className="bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400 text-white">Tất cả đi muộn</Button>
-                                <Button variant="danger" onClick={() => handleBulkChange(AttendanceStatus.ABSENT)} disabled={!canTakeAttendance}>Tất cả vắng</Button>
+                        <div className="mb-4 p-3 bg-blue-50 dark:bg-gray-700 rounded-lg text-blue-800 dark:text-blue-200 text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                           <p className="flex-grow">Dùng các nút thao tác nhanh để điểm danh hàng loạt.</p>
+                           <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto flex-wrap justify-center">
+                                <Button size="sm" variant="secondary" onClick={() => handleBulkChange(AttendanceStatus.PRESENT)} disabled={!canTakeAttendance}>Tất cả có mặt</Button>
+                                <Button size="sm" onClick={() => handleBulkChange(AttendanceStatus.LATE)} disabled={!canTakeAttendance} className="bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400 text-white">Tất cả đi muộn</Button>
+                                <Button size="sm" variant="danger" onClick={() => handleBulkChange(AttendanceStatus.ABSENT)} disabled={!canTakeAttendance}>Tất cả vắng</Button>
                            </div>
                         </div>
                     )}
 
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {classStudents.length > 0 ? (
                             classStudents.map(student => (
-                                <div key={student.id} className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
+                                <div key={student.id} className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                                    <div className="w-full sm:w-auto flex-grow">
                                         <span className="font-semibold">{student.name}</span>
-                                        {attendanceData.get(student.id) === AttendanceStatus.UNMARKED && (
-                                            <span className="text-xs font-bold bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200 px-2 py-0.5 rounded-full">
-                                                Chưa điểm danh
+                                        <div className="flex items-center gap-2 mt-1">
+                                            {attendanceData.get(student.id) === AttendanceStatus.UNMARKED && (
+                                                <span className="text-xs font-bold bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200 px-2 py-0.5 rounded-full">
+                                                    Chưa điểm danh
+                                                </span>
+                                            )}
+                                            <span className="text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 px-2 py-0.5 rounded-full">
+                                                Buổi {attendanceCounts.get(student.id) || 0}
                                             </span>
-                                        )}
-                                        <span className="text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 px-2 py-0.5 rounded-full">
-                                            Buổi {attendanceCounts.get(student.id) || 0}
-                                        </span>
+                                        </div>
                                     </div>
-                                    <div className="flex space-x-2">
+                                    <div className="flex w-full sm:w-auto sm:max-w-xs space-x-2">
                                         <StatusButton current={attendanceData.get(student.id)!} target={AttendanceStatus.PRESENT} onClick={() => handleStatusChange(student.id, AttendanceStatus.PRESENT)} label="Có mặt" color="bg-green-500" icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>} />
-                                        <StatusButton current={attendanceData.get(student.id)!} target={AttendanceStatus.ABSENT} onClick={() => handleStatusChange(student.id, AttendanceStatus.ABSENT)} label="Vắng" color="bg-red-500" icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>} />
                                         <StatusButton current={attendanceData.get(student.id)!} target={AttendanceStatus.LATE} onClick={() => handleStatusChange(student.id, AttendanceStatus.LATE)} label="Trễ" color="bg-yellow-500" icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} />
+                                        <StatusButton current={attendanceData.get(student.id)!} target={AttendanceStatus.ABSENT} onClick={() => handleStatusChange(student.id, AttendanceStatus.ABSENT)} label="Vắng" color="bg-red-500" icon={<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>} />
                                     </div>
                                 </div>
                             ))

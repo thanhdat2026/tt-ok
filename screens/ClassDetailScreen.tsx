@@ -471,8 +471,8 @@ export const ClassDetailScreen: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="card-base">
-                <div className="flex justify-between items-start gap-4">
-                    <div>
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div className="flex-grow">
                         <h1 className="text-3xl font-bold">{cls.name}</h1>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-sm">
                             <span className="bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full font-mono font-semibold">ID: {cls.id}</span>
@@ -486,9 +486,9 @@ export const ClassDetailScreen: React.FC = () => {
                         </div>
                     </div>
                     {canManage && (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                            <Button variant="secondary" onClick={handleEdit}>{ICONS.edit} Sửa</Button>
-                            <Button variant="danger" onClick={() => setDeleteConfirmOpen(true)}>{ICONS.delete} Xóa</Button>
+                        <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+                            <Button variant="secondary" onClick={handleEdit} className="flex-1 sm:flex-none">{ICONS.edit} Sửa</Button>
+                            <Button variant="danger" onClick={() => setDeleteConfirmOpen(true)} className="flex-1 sm:flex-none">{ICONS.delete} Xóa</Button>
                         </div>
                     )}
                 </div>
@@ -568,7 +568,7 @@ export const ClassDetailScreen: React.FC = () => {
                                     title={<div className="flex justify-between w-full"><span>{getStudentName(report.studentId)}</span><span className="text-primary font-bold">{report.score}/10</span></div>}
                                     details={[
                                         { label: "Ngày", value: report.date },
-                                        { label: "Nhận xét", value: <i className="truncate block">{report.comments}</i> },
+                                        { label: "Nhận xét", value: <i className="block whitespace-normal">{report.comments}</i> },
                                     ]}
                                 />
                             ))}

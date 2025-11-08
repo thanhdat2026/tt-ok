@@ -57,8 +57,8 @@ export const TeacherDetailScreen: React.FC = () => {
         <>
             <div className="space-y-6">
                 <div className="card-base">
-                    <div className="flex justify-between items-start gap-4">
-                        <div>
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                        <div className="flex-grow">
                             <h1 className="text-3xl font-bold">{teacher.name}</h1>
                             <p className="text-lg text-gray-500 dark:text-gray-400">{teacher.subject}</p>
                             <span className={`mt-1 px-2 inline-flex text-sm leading-5 font-semibold rounded-full ${teacher.status === PersonStatus.ACTIVE ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -66,9 +66,9 @@ export const TeacherDetailScreen: React.FC = () => {
                             </span>
                         </div>
                          {canManage && (
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                                <Button variant="secondary" onClick={handleEdit}>{ICONS.edit} Sửa</Button>
-                                <Button variant="danger" onClick={handleDeleteClick}>{ICONS.delete} Xóa</Button>
+                            <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+                                <Button variant="secondary" onClick={handleEdit} className="flex-1 sm:flex-none">{ICONS.edit} Sửa</Button>
+                                <Button variant="danger" onClick={handleDeleteClick} className="flex-1 sm:flex-none">{ICONS.delete} Xóa</Button>
                             </div>
                         )}
                     </div>

@@ -91,10 +91,27 @@
     box-shadow: none;
   }
 
-  /* Print Styles - Removed */
+  /* Print Styles */
   @media print {
     .print-hidden {
         display: none !important;
+    }
+    body {
+        background-color: #ffffff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .modal-content-wrapper {
+      overflow-y: visible !important;
+      padding: 0 !important;
+    }
+    .invoice-page-break {
+        page-break-after: always;
+        break-after: page;
+    }
+    .invoice-page-break:last-child {
+        page-break-after: auto;
+        break-after: auto;
     }
   }
 

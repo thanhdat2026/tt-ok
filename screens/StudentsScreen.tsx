@@ -15,6 +15,11 @@ import { ResetPasswordModal } from '../components/auth/ChangePasswordModal';
 import { PaymentModal } from '../components/finance/PaymentModal';
 
 
+const removeAccents = (str: string) => {
+  if (!str) return '';
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+};
+
 const ClassSelector: React.FC<{
     allClasses: Class[];
     selectedClassIds: string[];
@@ -266,18 +271,58 @@ export const StudentsScreen: React.FC = () => {
 
         if (!searchQuery) return studentsToFilter;
         
-        const lowercasedQuery = searchQuery.toLowerCase();
-        return studentsToFilter.filter(s => 
-            s.id.toLowerCase().includes(lowercasedQuery) ||
-            s.name.toLowerCase().includes(lowercasedQuery) ||
-            s.email.toLowerCase().includes(lowercasedQuery) ||
-            s.phone.includes(searchQuery)
-        );
+        const normalizedQuery = removeAccents(searchQuery.toLowerCase());
+        return studentsToFilter.filter(s => {
+            const normalizedName = removeAccents(s.name.toLowerCase());
+            const phoneMatch = s.phone.includes(searchQuery);
+            const nameMatch = normalizedName.includes(normalizedQuery);
+            return phoneMatch || nameMatch;
+        });
     }, [state.students, state.classes, searchQuery, classFilter]);
     
     const sortedStudents = useMemo(() => {
         let sortableItems = [...filteredStudents];
-        if (sortConfig !== null) {
+        
+        if (searchQuery) {
+            const normalizedQuery = removeAccents(searchQuery.toLowerCase());
+
+            const getScore = (student: Student) => {
+                // Phone match is highest priority
+                if (student.phone.includes(searchQuery)) {
+                    return 3;
+                }
+                
+                const normalizedName = removeAccents(student.name.toLowerCase());
+                const nameParts = normalizedName.split(' ');
+                const lastName = nameParts[nameParts.length - 1];
+
+                // Last name match is second priority
+                if (lastName.startsWith(normalizedQuery)) {
+                    return 2;
+                }
+
+                // Any other name match is lowest priority
+                if (normalizedName.includes(normalizedQuery)) {
+                    return 1;
+                }
+
+                return 0;
+            };
+
+            sortableItems.sort((a, b) => {
+                const scoreA = getScore(a);
+                const scoreB = getScore(b);
+
+                if (scoreA !== scoreB) {
+                    return scoreB - scoreA; // Higher score comes first
+                }
+
+                // If scores are equal, sort by name alphabetically
+                return a.name.localeCompare(b.name, 'vi');
+            });
+
+        } else if (sortConfig !== null) {
+            // Original sorting logic when not searching
             const getLastName = (fullName: string) => {
                 if (!fullName) return '';
                 const parts = fullName.trim().split(/\s+/);
@@ -312,7 +357,7 @@ export const StudentsScreen: React.FC = () => {
             });
         }
         return sortableItems;
-    }, [filteredStudents, sortConfig]);
+    }, [filteredStudents, sortConfig, searchQuery]);
 
     const totalPages = Math.ceil(sortedStudents.length / ITEMS_PER_PAGE);
     const paginatedStudents = sortedStudents.slice(
@@ -437,7 +482,7 @@ export const StudentsScreen: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input 
                         type="text" 
-                        placeholder="Tìm kiếm học viên (mã, tên, email, SĐT)..." 
+                        placeholder="Tìm kiếm học viên (tên, SĐT)..." 
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         className="form-input"

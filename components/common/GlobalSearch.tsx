@@ -5,13 +5,19 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { SearchResult } from '../../types';
 import { ICONS } from '../../constants';
 
+const removeAccents = (str: string) => {
+    if (!str) return '';
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
+};
+
 const HighlightMatch: React.FC<{ text: string; query: string }> = ({ text, query }) => {
     if (!query || !text) return <>{text}</>;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    const sanitizedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${sanitizedQuery})`, 'gi'));
     return (
         <span>
             {parts.map((part, i) =>
-                part.toLowerCase() === query.toLowerCase() ? (
+                removeAccents(part.toLowerCase()) === removeAccents(query.toLowerCase()) ? (
                     <span key={i} className="font-bold text-primary">{part}</span>
                 ) : (
                     part
@@ -30,12 +36,6 @@ export const GlobalSearch: React.FC = () => {
     const { state } = useData();
     const navigate = useNavigate();
     const searchRef = useRef<HTMLDivElement>(null);
-
-    const typeIcons = {
-        student: ICONS.students,
-        teacher: ICONS.teachers,
-        class: ICONS.classes,
-    };
 
     const handleResultClick = React.useCallback((path: string) => {
         setQuery('');
@@ -63,25 +63,30 @@ export const GlobalSearch: React.FC = () => {
         }
 
         const lowerQuery = debouncedQuery.toLowerCase();
+        const normalizedQuery = removeAccents(lowerQuery);
         const foundResults: SearchResult[] = [];
 
         // Search Students
         state.students.forEach(s => {
-            if (s.name.toLowerCase().includes(lowerQuery) || s.id.toLowerCase().includes(lowerQuery)) {
+            const normalizedName = removeAccents(s.name.toLowerCase());
+            if (normalizedName.includes(normalizedQuery) || s.phone.includes(debouncedQuery) || s.id.toLowerCase().includes(lowerQuery)) {
                 foundResults.push({ id: s.id, name: s.name, type: 'student', path: `/student/${s.id}`, context: `Phụ huynh: ${s.parentName}` });
             }
         });
 
         // Search Teachers
         state.teachers.forEach(t => {
-            if (t.name.toLowerCase().includes(lowerQuery) || t.subject.toLowerCase().includes(lowerQuery)) {
+            const normalizedName = removeAccents(t.name.toLowerCase());
+            const normalizedSubject = removeAccents(t.subject.toLowerCase());
+            if (normalizedName.includes(normalizedQuery) || normalizedSubject.includes(normalizedQuery)) {
                 foundResults.push({ id: t.id, name: t.name, type: 'teacher', path: `/teacher/${t.id}`, context: `Môn: ${t.subject}` });
             }
         });
 
         // Search Classes
         state.classes.forEach(c => {
-            if (c.name.toLowerCase().includes(lowerQuery)) {
+            const normalizedName = removeAccents(c.name.toLowerCase());
+            if (normalizedName.includes(normalizedQuery)) {
                 const teacherNames = (c.teacherIds || [])
                     .map(teacherId => state.teachers.find(t => t.id === teacherId)?.name)
                     .filter(name => !!name)
@@ -151,14 +156,14 @@ export const GlobalSearch: React.FC = () => {
                                     className={`px-4 py-3 cursor-pointer border-b dark:border-gray-700 last:border-b-0
                                         ${index === activeIndex ? 'bg-gray-100 dark:bg-gray-700' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`
                                     }>
-                                    <p className="font-semibold text-gray-800 dark:text-gray-200"><HighlightMatch text={result.name} query={query} /></p>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-200"><HighlightMatch text={result.name} query={debouncedQuery} /></p>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">{result.context}</p>
                                 </li>
                             ))}
                         </ul>
-                    ) : (
+                    ) : debouncedQuery.length > 1 ? (
                         <div className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">Không tìm thấy kết quả.</div>
-                    )}
+                    ) : null}
                 </div>
             )}
         </div>

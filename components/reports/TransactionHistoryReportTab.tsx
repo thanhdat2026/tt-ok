@@ -3,8 +3,7 @@ import { useData } from '../../hooks/useDataContext';
 import { Table, SortConfig, Column } from '../common/Table';
 import { Button } from '../common/Button';
 import { ICONS } from '../../constants';
-// FIX: Import Class type to allow for explicit type annotation.
-import { Transaction, TransactionType, Class } from '../../types';
+import { Transaction, TransactionType, Class, Student } from '../../types';
 import { downloadAsCSV } from '../../services/csvExport';
 import { Pagination } from '../common/Pagination';
 import { ListItemCard } from '../common/ListItemCard';
@@ -41,13 +40,13 @@ export const TransactionHistoryReportTab: React.FC<TransactionHistoryReportTabPr
         
         let relevantTransactions = transactions.filter(t => t.date.startsWith(monthStr));
 
-        const studentMap = new Map(students.map(s => [s.id, s]));
+        // Fix: Explicitly type the studentMap to ensure correct type inference from .get()
+        const studentMap: Map<string, Student> = new Map(students.map((s: Student) => [s.id, s]));
         const studentClassMap = new Map<string, string[]>();
-        students.forEach(student => {
-            // FIX: Add explicit type annotation for 'c' to resolve 'unknown' type error.
+        students.forEach((student: Student) => {
             const enrolledClasses = (classes as Class[])
-                .filter(c => c.studentIds.includes(student.id))
-                .map(c => c.name);
+                .filter((c: Class) => c.studentIds.includes(student.id))
+                .map((c: Class) => c.name);
             studentClassMap.set(student.id, enrolledClasses);
         });
         
@@ -79,16 +78,13 @@ export const TransactionHistoryReportTab: React.FC<TransactionHistoryReportTabPr
                 const bValue = b[sortConfig.key];
                 
                 if (aValue == null || bValue == null) return 0;
-
+    
                 if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
                 if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
                 
-                // Secondary sort by date if primary keys are equal
-                if (a.date !== b.date) {
-                    return new Date(b.date).getTime() - new Date(a.date).getTime();
-                }
-
-                return 0;
+                // If primary sort keys are equal (e.g., same date), sort by ID descending
+                // to ensure the newest transaction is always on top.
+                return b.id.localeCompare(a.id);
             });
         }
         return sortableItems;
