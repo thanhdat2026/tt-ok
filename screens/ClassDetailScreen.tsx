@@ -381,7 +381,9 @@ export const ClassDetailScreen: React.FC = () => {
                 const aValue = a[studentSortConfig.key];
                 const bValue = b[studentSortConfig.key];
                 
-                if (aValue == null || bValue == null) return 0;
+                if (aValue == null && bValue != null) return 1;
+                if (aValue != null && bValue == null) return -1;
+                if (aValue == null && bValue == null) return 0;
                 
                 if (aValue < bValue) return studentSortConfig.direction === 'ascending' ? -1 : 1;
                 if (aValue > bValue) return studentSortConfig.direction === 'ascending' ? 1 : -1;
@@ -405,6 +407,11 @@ export const ClassDetailScreen: React.FC = () => {
             sortableItems.sort((a, b) => {
                 const aValue = a[reportSortConfig.key];
                 const bValue = b[reportSortConfig.key];
+                
+                if (aValue == null && bValue != null) return 1;
+                if (aValue != null && bValue == null) return -1;
+                if (aValue == null && bValue == null) return 0;
+
                 if (aValue < bValue) return reportSortConfig.direction === 'ascending' ? -1 : 1;
                 if (aValue > bValue) return reportSortConfig.direction === 'ascending' ? 1 : -1;
                 return 0;

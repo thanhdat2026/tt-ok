@@ -592,7 +592,75 @@ export async function generatePayrolls({ month, year }: { month: number, year: n
 
 // --- Data Management ---
 export const backupData = async (): Promise<AppData> => getLocalData();
-export const restoreData = async (data: AppData): Promise<void> => setLocalData(data);
+
+/**
+ * Merges arrays of objects with unique IDs. Backup items overwrite current items.
+ * @param current The current array of items.
+ * @param backup The backup array of items.
+ * @returns A new merged array.
+ */
+function mergeById<T extends { id: string }>(current: T[] = [], backup?: T[]): T[] {
+    if (!backup || !Array.isArray(backup)) {
+        return current; // If backup data is missing or not an array, return current data.
+    }
+    
+    const backupMap = new Map(backup.map(item => [item.id, item]));
+    const currentMap = new Map(current.map(item => [item.id, item]));
+
+    // Merge maps: items from backup will overwrite items from current with the same ID.
+    const mergedMap = new Map([...currentMap, ...backupMap]);
+    
+    return Array.from(mergedMap.values());
+}
+
+/**
+ * Merges attendance records using a composite key (classId, studentId, date).
+ * @param current The current array of attendance records.
+ * @param backup The backup array of attendance records.
+ * @returns A new merged array.
+ */
+function mergeAttendance(current: AttendanceRecord[] = [], backup?: AttendanceRecord[]): AttendanceRecord[] {
+    if (!backup || !Array.isArray(backup)) {
+        return current; // If backup data is missing, return current data.
+    }
+
+    const createKey = (record: AttendanceRecord) => `${record.classId}|${record.studentId}|${record.date}`;
+
+    const backupMap = new Map(backup.map(item => [createKey(item), item]));
+    const currentMap = new Map(current.map(item => [createKey(item), item]));
+
+    // Merge maps: records from backup will overwrite records from current with the same composite key.
+    const mergedMap = new Map([...currentMap, ...backupMap]);
+    
+    return Array.from(mergedMap.values());
+}
+
+
+export const restoreData = async (data: Partial<AppData>): Promise<void> => {
+    const currentData = await getLocalData();
+
+    // Perform an intelligent merge instead of a simple overwrite.
+    const restoredData: AppData = {
+        students: mergeById(currentData.students, data.students),
+        teachers: mergeById(currentData.teachers, data.teachers),
+        staff: mergeById(currentData.staff, data.staff),
+        classes: mergeById(currentData.classes, data.classes),
+        // Use the specialized merge function for attendance
+        attendance: mergeAttendance(currentData.attendance, data.attendance),
+        invoices: mergeById(currentData.invoices, data.invoices),
+        progressReports: mergeById(currentData.progressReports, data.progressReports),
+        transactions: mergeById(currentData.transactions, data.transactions),
+        income: mergeById(currentData.income, data.income),
+        expenses: mergeById(currentData.expenses, data.expenses),
+        payrolls: mergeById(currentData.payrolls, data.payrolls),
+        announcements: mergeById(currentData.announcements, data.announcements),
+        // Settings are merged to preserve new settings not present in the backup.
+        settings: { ...currentData.settings, ...(data.settings || {}) },
+    };
+    
+    await setLocalData(restoredData);
+};
+
 export const resetToMockData = async (): Promise<void> => {
     localStorage.removeItem(APP_DATA_KEY);
     await idbClear(HANDLE_KEY);
