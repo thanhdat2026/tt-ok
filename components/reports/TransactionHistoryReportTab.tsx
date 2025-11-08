@@ -3,7 +3,8 @@ import { useData } from '../../hooks/useDataContext';
 import { Table, SortConfig, Column } from '../common/Table';
 import { Button } from '../common/Button';
 import { ICONS } from '../../constants';
-import { Transaction, TransactionType } from '../../types';
+// FIX: Import Class type to allow for explicit type annotation.
+import { Transaction, TransactionType, Class } from '../../types';
 import { downloadAsCSV } from '../../services/csvExport';
 import { Pagination } from '../common/Pagination';
 import { ListItemCard } from '../common/ListItemCard';
@@ -43,14 +44,15 @@ export const TransactionHistoryReportTab: React.FC<TransactionHistoryReportTabPr
         const studentMap = new Map(students.map(s => [s.id, s]));
         const studentClassMap = new Map<string, string[]>();
         students.forEach(student => {
-            const enrolledClasses = classes
+            // FIX: Add explicit type annotation for 'c' to resolve 'unknown' type error.
+            const enrolledClasses = (classes as Class[])
                 .filter(c => c.studentIds.includes(student.id))
                 .map(c => c.name);
             studentClassMap.set(student.id, enrolledClasses);
         });
         
         if (classFilter !== 'all') {
-            const classStudentIds = new Set(classes.find(c => c.id === classFilter)?.studentIds || []);
+            const classStudentIds = new Set(classes.find((c: Class) => c.id === classFilter)?.studentIds || []);
             relevantTransactions = relevantTransactions.filter(t => classStudentIds.has(t.studentId));
         }
 

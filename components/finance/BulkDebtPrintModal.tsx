@@ -7,8 +7,6 @@ import { useData } from '../../hooks/useDataContext';
 import { ICONS } from '../../constants';
 import { useToast } from '../../hooks/useToast';
 
-declare var JSZip: any;
-declare var saveAs: any;
 declare global {
     interface Window {
         html2canvas: any;
@@ -28,10 +26,9 @@ export const BulkDebtPrintModal: React.FC<BulkDebtPrintModalProps> = ({ isOpen, 
     const { toast } = useToast();
     const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
     
-    // For ZIP download
+    // For individual download
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadIndex, setDownloadIndex] = useState(0);
-    const zipRef = useRef<any>(null);
 
     // For automated sequential copy
     const [isCopying, setIsCopying] = useState(false);
@@ -48,7 +45,6 @@ export const BulkDebtPrintModal: React.FC<BulkDebtPrintModalProps> = ({ isOpen, 
             setSelectedStudentIds([]);
             setIsDownloading(false);
             setDownloadIndex(0);
-            zipRef.current = null;
             setIsCopying(false);
             setCopyQueue([]);
             setCurrentCopyIndex(0);
@@ -74,16 +70,11 @@ export const BulkDebtPrintModal: React.FC<BulkDebtPrintModalProps> = ({ isOpen, 
         }
     };
 
-    // --- ZIP Download Logic ---
+    // --- Image Download Logic ---
     const handleStartDownload = () => {
         if (selectedStudents.length > 0) {
-            if (typeof JSZip === 'undefined' || typeof saveAs === 'undefined') {
-                toast.error("Thư viện nén file chưa sẵn sàng. Vui lòng kiểm tra kết nối mạng và thử lại.");
-                return;
-            }
             setIsDownloading(true);
             setDownloadIndex(0);
-            zipRef.current = new JSZip();
         }
     };
 
@@ -92,19 +83,8 @@ export const BulkDebtPrintModal: React.FC<BulkDebtPrintModalProps> = ({ isOpen, 
 
         const processDownloadQueue = async () => {
             if (downloadIndex >= selectedStudents.length) {
-                if (zipRef.current) {
-                    try {
-                        toast.info('Đang tạo file nén, vui lòng chờ...');
-                        const zipBlob = await zipRef.current.generateAsync({ type: "blob", compression: "DEFLATE" });
-                        saveAs(zipBlob, `ThongBaoHocPhi_${new Date().toISOString().split('T')[0]}.zip`);
-                        toast.success('Tải file nén thành công!');
-                    } catch (err) {
-                        console.error("Error generating zip:", err);
-                        toast.error("Lỗi khi tạo file nén.");
-                    } finally {
-                        setIsDownloading(false);
-                    }
-                }
+                toast.success(`Hoàn tất tải ${selectedStudents.length} phiếu!`);
+                setIsDownloading(false);
                 return;
             }
 
@@ -116,13 +96,13 @@ export const BulkDebtPrintModal: React.FC<BulkDebtPrintModalProps> = ({ isOpen, 
                 try {
                     const student = selectedStudents[downloadIndex];
                     const canvas = await window.html2canvas(element, { scale: 2.5, useCORS: true });
-                    canvas.toBlob((blob: Blob | null) => {
-                        if (blob && zipRef.current) {
-                            const filename = `TBHP_${student.id}_${student.name.replace(/\s/g, '_')}.png`;
-                            zipRef.current.file(filename, blob);
-                        }
-                        setDownloadIndex(prev => prev + 1);
-                    }, 'image/png');
+                    const link = document.createElement('a');
+                    link.download = `TBHP_${student.id}_${student.name.replace(/\s/g, '_')}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setDownloadIndex(prev => prev + 1);
                 } catch(err) {
                     console.error("Failed to export image for student:", selectedStudents[downloadIndex].name, err);
                     toast.error(`Lỗi khi tạo ảnh cho ${selectedStudents[downloadIndex].name}.`);
@@ -246,7 +226,7 @@ export const BulkDebtPrintModal: React.FC<BulkDebtPrintModalProps> = ({ isOpen, 
                     </div>
                     <div className="space-y-2 pt-4 border-t dark:border-gray-700">
                          <Button onClick={handleStartDownload} isLoading={isDownloading} disabled={selectedStudents.length === 0 || isCopying} className="w-full">
-                             {isDownloading ? `Đang nén ${downloadIndex}/${selectedStudents.length}...` : <>{ICONS.download} Nén & Tải ảnh ({selectedStudents.length})</>}
+                             {isDownloading ? `Đang tải ${downloadIndex + 1}/${selectedStudents.length}...` : <>{ICONS.download} Tải ảnh ({selectedStudents.length})</>}
                          </Button>
                          <Button onClick={handleStartSequentialCopy} isLoading={isCopying} disabled={selectedStudents.length === 0 || isDownloading} className="w-full" variant="secondary">
                              {isCopying ? `Đang sao chép ${currentCopyIndex + 1}/${copyQueue.length}...` : <>{ICONS.copy} Bắt đầu sao chép tự động ({selectedStudents.length})</>}

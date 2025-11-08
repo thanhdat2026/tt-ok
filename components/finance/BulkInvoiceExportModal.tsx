@@ -5,11 +5,6 @@ import { TuitionFeeNotice } from './TuitionFeeNotice';
 import { Invoice } from '../../types';
 import { ICONS } from '../../constants';
 
-// Declare global variables from CDN scripts
-declare var JSZip: any;
-declare var saveAs: any;
-
-
 interface BulkInvoiceExportModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -20,27 +15,18 @@ export const BulkInvoiceExportModal: React.FC<BulkInvoiceExportModalProps> = ({ 
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isExporting, setIsExporting] = useState(false);
     const noticeRef = useRef<HTMLDivElement>(null);
-    const zipRef = useRef<any>(null);
 
     // Start export when modal opens
     useEffect(() => {
         if (isOpen && invoices.length > 0) {
             setCurrentIndex(0);
             setIsExporting(true);
-            if (typeof JSZip !== 'undefined') {
-                zipRef.current = new JSZip();
-            } else {
-                console.error("JSZip library is not loaded.");
-                setIsExporting(false); 
-                onClose(); // Close if lib is missing
-            }
         } else if (!isOpen) {
             // Reset state on close
             setIsExporting(false);
             setCurrentIndex(0);
-            zipRef.current = null;
         }
-    }, [isOpen, invoices, onClose]);
+    }, [isOpen, invoices]);
 
     // Process one item from the queue
     useEffect(() => {
@@ -48,21 +34,8 @@ export const BulkInvoiceExportModal: React.FC<BulkInvoiceExportModalProps> = ({ 
 
         const processQueue = async () => {
             if (currentIndex >= invoices.length) {
-                // Finished processing all items, now generate and download zip
-                if (zipRef.current) {
-                    try {
-                        const zipBlob = await zipRef.current.generateAsync({ type: "blob", compression: "DEFLATE" });
-                        if (typeof saveAs !== 'undefined') {
-                            saveAs(zipBlob, `Hoa_Don_Hoc_Phi_${new Date().toISOString().split('T')[0]}.zip`);
-                        } else {
-                            console.error("FileSaver library is not loaded.");
-                        }
-                    } catch (err) {
-                        console.error("Error generating zip file:", err);
-                    } finally {
-                        setIsExporting(false); // End of process
-                    }
-                }
+                // Finished processing all items.
+                setIsExporting(false); // End of process
                 return;
             }
 
@@ -80,14 +53,15 @@ export const BulkInvoiceExportModal: React.FC<BulkInvoiceExportModalProps> = ({ 
                 const invoice = invoices[currentIndex];
                 const canvas = await window.html2canvas(noticeRef.current, { scale: 2, useCORS: true });
                 
-                canvas.toBlob((blob: Blob | null) => {
-                    if (blob && zipRef.current) {
-                        const filename = `PhieuHocPhi_${invoice.studentId}_${invoice.month}.png`;
-                        zipRef.current.file(filename, blob);
-                    }
-                    // Move to the next item in the queue regardless of blob success
-                    setCurrentIndex(prev => prev + 1);
-                }, 'image/png');
+                const link = document.createElement('a');
+                link.download = `PhieuHocPhi_${invoice.studentId}_${invoice.month}.png`;
+                link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Move to the next item in the queue
+                setCurrentIndex(prev => prev + 1);
                 
             } catch (error) {
                 console.error("Error exporting invoice:", error);
@@ -115,11 +89,11 @@ export const BulkInvoiceExportModal: React.FC<BulkInvoiceExportModalProps> = ({ 
                             <div className="flex justify-center items-center mb-4">
                                 {ICONS.loading}
                             </div>
-                            <h3 className="text-lg font-semibold">Đang nén các hóa đơn...</h3>
+                            <h3 className="text-lg font-semibold">Đang xuất các hóa đơn...</h3>
                             <p className="text-gray-500">
                                 Đã xử lý {currentIndex} / {invoices.length} hóa đơn.
                             </p>
-                            <p className="text-sm mt-2 text-gray-400">Vui lòng không đóng cửa sổ này. Quá trình tải về sẽ bắt đầu khi hoàn tất.</p>
+                            <p className="text-sm mt-2 text-gray-400">Trình duyệt có thể hỏi xin phép để tải nhiều tệp. Vui lòng không đóng cửa sổ này.</p>
                         </>
                     ) : (
                         <>
@@ -128,7 +102,7 @@ export const BulkInvoiceExportModal: React.FC<BulkInvoiceExportModalProps> = ({ 
                             </div>
                             <h3 className="text-lg font-semibold">Hoàn tất!</h3>
                             <p className="text-gray-500">
-                                Đã nén thành công {invoices.length} hóa đơn. Quá trình tải xuống đã bắt đầu.
+                                Đã xuất thành công {invoices.length} hóa đơn.
                             </p>
                             <Button onClick={onClose} className="mt-6">Đóng</Button>
                         </>
